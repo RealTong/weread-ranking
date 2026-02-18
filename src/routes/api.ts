@@ -6,8 +6,11 @@ import {
   getFriendsWithLatestMeta,
   getLatestFriendMetaCapturedAt,
   getLatestRanking,
+  setSyncState,
 } from '../storage/db'
+import { getWeReadCredentialsStatus, normalizeWeReadCredentials, setWeReadCredentials } from '../credentials'
 import { refreshAll } from '../workflows/refresh'
+import { fetchUser } from '../weread'
 
 export const api = new Hono<{ Bindings: CloudflareBindings }>()
 
@@ -106,4 +109,69 @@ api.get('/avatars/:userVid', async (c) => {
 api.post('/refresh', async (c) => {
   const result = await refreshAll(c.env, { source: 'api' })
   return c.json(result, result.ok ? 200 : 500)
+})
+
+api.get('/admin/credentials', async (c) => {
+  if (!c.env.API_KEY) return c.json({ ok: false, error: 'API_KEY not configured' }, 400)
+  const status = await getWeReadCredentialsStatus(c.env)
+  return c.json({ ok: true, status })
+})
+
+api.post('/admin/credentials', async (c) => {
+  if (!c.env.API_KEY) return c.json({ ok: false, error: 'API_KEY not configured' }, 400)
+
+  let body: unknown
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ ok: false, error: 'Invalid JSON body' }, 400)
+  }
+
+  const b = body as Record<string, unknown>
+  let creds
+  try {
+    creds = normalizeWeReadCredentials({
+      vid: typeof b.vid === 'string' ? b.vid : '',
+      skey: typeof b.skey === 'string' ? b.skey : '',
+      basever: typeof b.basever === 'string' ? b.basever : undefined,
+      v: typeof b.v === 'string' ? b.v : undefined,
+      channelId: typeof b.channelId === 'string' ? b.channelId : undefined,
+      userAgent: typeof b.userAgent === 'string' ? b.userAgent : undefined,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return c.json({ ok: false, error: message }, 400)
+  }
+
+  const selfUserVid = Number.parseInt(creds.vid, 10)
+  if (!Number.isFinite(selfUserVid)) return c.json({ ok: false, error: 'Invalid vid' }, 400)
+
+  try {
+    await fetchUser(creds, selfUserVid)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return c.json({ ok: false, error: `Credentials validation failed: ${message}` }, 400)
+  }
+
+  const resetSync = b.resetSync === true
+  if (resetSync) {
+    await Promise.all([
+      setSyncState(c.env.DB, 'friend_wechat_synckey', '0'),
+      setSyncState(c.env.DB, 'friend_wechat_syncver', '0'),
+      setSyncState(c.env.DB, 'friend_ranking_synckey', '0'),
+    ])
+  }
+
+  try {
+    const { updatedAt } = await setWeReadCredentials(c.env, creds)
+    return c.json({
+      ok: true,
+      updatedAt,
+      updatedAtIso: new Date(updatedAt).toISOString(),
+      resetSync,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return c.json({ ok: false, error: message }, 500)
+  }
 })

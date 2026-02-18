@@ -3,6 +3,10 @@
 
 API_KEY="change-me"
 
+# Required only if you want to rotate credentials via `/api/admin/credentials`
+# Generate: `openssl rand -base64 32`
+CRED_ENC_KEY="REPLACE_ME"
+
 WEREAD_VID="REPLACE_ME"
 WEREAD_SKEY="REPLACE_ME"
 

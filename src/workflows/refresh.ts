@@ -7,6 +7,7 @@ import {
   setSyncState,
   upsertFriend,
 } from '../storage/db'
+import { getWeReadCredentials } from '../credentials'
 import { mapWithConcurrency } from '../utils/concurrency'
 import { sha256Hex } from '../utils/crypto'
 import { fetchFriendRanking, fetchFriendWechat, fetchUser } from '../weread'
@@ -88,6 +89,8 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
   }
 
   try {
+    const creds = await getWeReadCredentials(env)
+
     // Load previous sync state from DB (if present), else fall back to env.
     const stateRows = await env.DB
       .prepare('SELECT key, value FROM sync_state WHERE key IN (?1, ?2, ?3)')
@@ -102,7 +105,7 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
 
     const capturedAt = Date.now()
 
-    const wechat = await fetchFriendWechat(env, {
+    const wechat = await fetchFriendWechat(creds, {
       synckey: sync.friendWechat.synckey,
       syncver: sync.friendWechat.syncver,
       userClick: 1,
@@ -124,7 +127,7 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
       })),
     )
 
-    const ranking = await fetchFriendRanking(env, { synckey: sync.friendRanking.synckey })
+    const ranking = await fetchFriendRanking(creds, { synckey: sync.friendRanking.synckey })
     sync.friendRanking = { synckey: ranking.synckey }
     await setSyncState(env.DB, 'friend_ranking_synckey', String(sync.friendRanking.synckey))
 
@@ -158,7 +161,7 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
     const concurrency = 5
 
     await mapWithConcurrency(uniqueVids, concurrency, async (userVid) => {
-      const profile = await fetchUser(env, userVid)
+      const profile = await fetchUser(creds, userVid)
 
       let avatarR2Key: string | null = null
       if (profile.avatar) {
