@@ -5,7 +5,6 @@ Serverless API to fetch WeRead (微信读书) friends data, store snapshots in D
 ## Setup
 
 ```bash
-cd worker
 bun install
 ```
 
@@ -36,10 +35,11 @@ bun run migrate:remote
 
 ### 3) Configure secrets
 
-Local dev: copy `worker/.dev.vars.example` → `worker/.dev.vars` and fill:
+Local dev: copy `.dev.vars.example` → `.dev.vars` and fill:
 - `API_KEY`
 - `WEREAD_VID`
 - `WEREAD_SKEY`
+- (optional) `CRED_ENC_KEY` (for rotating skey via API)
 
 Prod: use `wrangler secret put`:
 
@@ -47,7 +47,23 @@ Prod: use `wrangler secret put`:
 bunx wrangler secret put API_KEY
 bunx wrangler secret put WEREAD_VID
 bunx wrangler secret put WEREAD_SKEY
+bunx wrangler secret put CRED_ENC_KEY
 ```
+
+### Optional: rotate skey without redeploy
+
+If `skey` expires frequently, the simplest approach is updating `WEREAD_SKEY` via `wrangler secret put`.
+
+If you want to update it via HTTP (no redeploy), set `CRED_ENC_KEY` and call:
+
+```bash
+curl -X POST "http://127.0.0.1:8787/api/admin/credentials" \
+  -H "x-api-key: $API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"vid":"<your vid>","skey":"<new skey>","resetSync":true}'
+```
+
+This stores credentials encrypted in D1 and refresh jobs will prefer the D1-stored credentials.
 
 ## Run
 
@@ -65,6 +81,8 @@ All endpoints below require `x-api-key: <API_KEY>` if `API_KEY` is set.
 - `GET /api/ranking` latest weekly ranking snapshot
 - `GET /api/friends/:userVid/history?limit=200` per-friend history
 - `GET /api/avatars/:userVid` R2 avatar (or redirect to original URL)
+- `GET /api/admin/credentials` credentials status (requires `API_KEY`)
+- `POST /api/admin/credentials` set encrypted credentials in D1 (requires `API_KEY`)
 
 ## Notes
 
