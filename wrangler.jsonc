@@ -1,35 +1,24 @@
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "weread-ranking",
-	"main": "src/index.ts",
-	"compatibility_date": "2026-02-18",
-	// Cron trigger: refresh WeRead data hourly (edit as you like)
-	"triggers": {
-		"crons": [
-			"0 * * * *"
-		]
-	},
-	// NOTE: DO NOT put tokens in this file. Use `.dev.vars` (local) or `wrangler secret put` (prod).
-	"d1_databases": [
-		{
-			"binding": "DB",
-			"database_name": "weread-ranking",
-			"database_id": "REPLACE_ME"
-		},
-		{
-			"binding": "weread_ranking",
-			"database_name": "weread-ranking",
-			"database_id": "5b2527dc-0e10-473b-a08d-f99605c1733a"
-		}
-	],
-	"r2_buckets": [
-		{
-			"binding": "AVATARS",
-			"bucket_name": "weread-avatars"
-		},
-		{
-			"bucket_name": "weread-avatars",
-			"binding": "weread_avatars"
-		}
-	]
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "weread-ranking",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-18",
+  // Cron trigger: refresh WeRead data hourly (edit as you like)
+  "triggers": {
+    "crons": ["0 * * * *"],
+  },
+  // NOTE: DO NOT put tokens in this file. Use `.dev.vars` (local) or `wrangler secret put` (prod).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "weread-ranking",
+      "database_id": "5b2527dc-0e10-473b-a08d-f99605c1733a",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "AVATARS",
+      "bucket_name": "weread-avatars",
+    },
+  ],
 }
