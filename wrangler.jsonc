@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "weread-ranking",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-18",
+
+  // Cron trigger: refresh WeRead data hourly (edit as you like)
+  "triggers": {
+    "crons": ["0 * * * *"]
+  },
+
+  // NOTE: DO NOT put tokens in this file. Use `.dev.vars` (local) or `wrangler secret put` (prod).
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "weread-ranking",
+      "database_id": "REPLACE_ME"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "AVATARS",
+      "bucket_name": "weread-avatars"
+    }
+  ]
+}

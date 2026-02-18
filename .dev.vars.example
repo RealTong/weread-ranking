@@ -1,0 +1,18 @@
+## Local-only secrets for `wrangler dev`
+# Copy to `.dev.vars` (gitignored) and fill values.
+
+API_KEY="change-me"
+
+WEREAD_VID="REPLACE_ME"
+WEREAD_SKEY="REPLACE_ME"
+
+# Optional (defaults are OK)
+WEREAD_BASEVER="10.0.3.79"
+WEREAD_V="10.0.3.79"
+WEREAD_CHANNEL_ID="AppStore"
+WEREAD_USER_AGENT="WeRead/10.0.3 (iPhone; iOS 26.2.1; Scale/3.00)"
+
+# Optional initial sync cursor (will be persisted in D1 after first refresh)
+WEREAD_FRIEND_WECHAT_SYNCKEY="0"
+WEREAD_FRIEND_WECHAT_SYNCVER="0"
+WEREAD_FRIEND_RANKING_SYNCKEY="0"
