@@ -1,6 +1,7 @@
 export type CloudflareBindings = {
   API_KEY?: string
   CRED_ENC_KEY?: string
+  CORS_ORIGIN?: string
 
   WEREAD_VID?: string
   WEREAD_SKEY?: string

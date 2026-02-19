@@ -1,6 +1,8 @@
-# weread-ranking worker (Cloudflare Workers + Hono)
+# weread-ranking
 
-Serverless API to fetch WeRead (微信读书) friends data, store snapshots in D1, optionally store avatars in R2, and expose an all-in-one API.
+- `src/`：Cloudflare Workers + Hono（serverless API）
+- `web/`：shadcn/ui + Vite 的 Web UI（展示朋友阅读数据与历史变化）
+- `private/captures/`：抓包得到的请求/响应（已忽略，不要提交到 Git）
 
 ## Setup
 
@@ -40,6 +42,7 @@ Local dev: copy `.dev.vars.example` → `.dev.vars` and fill:
 - `WEREAD_VID`
 - `WEREAD_SKEY`
 - (optional) `CRED_ENC_KEY` (for rotating skey via API)
+- (optional) `CORS_ORIGIN` (for calling API from a separate web origin)
 
 Prod: use `wrangler secret put`:
 
@@ -68,6 +71,14 @@ This stores credentials encrypted in D1 and refresh jobs will prefer the D1-stor
 ## Run
 
 ```bash
+bun run dev
+```
+
+## Web UI (local)
+
+```bash
+cd web
+bun install
 bun run dev
 ```
 

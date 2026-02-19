@@ -7,6 +7,9 @@ API_KEY="change-me"
 # Generate: `openssl rand -base64 32`
 CRED_ENC_KEY="REPLACE_ME"
 
+# Optional: enable CORS for the web UI (comma-separated). Example: "http://localhost:5173"
+CORS_ORIGIN="REPLACE_ME"
+
 WEREAD_VID="REPLACE_ME"
 WEREAD_SKEY="REPLACE_ME"
 
