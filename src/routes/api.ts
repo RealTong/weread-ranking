@@ -15,6 +15,8 @@ import { fetchUser } from '../weread'
 export const api = new Hono<{ Bindings: CloudflareBindings }>()
 
 api.use('*', async (c, next) => {
+  if (c.req.method === 'OPTIONS') return next()
+
   const expected = c.env.API_KEY
   if (!expected) return next()
 

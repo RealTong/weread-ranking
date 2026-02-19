@@ -3,7 +3,9 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "dev:web": "bun --cwd web run dev",
     "deploy": "wrangler deploy --minify",
+    "build:web": "bun --cwd web run build",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate:local": "wrangler d1 migrations apply DB --local",
