@@ -32,6 +32,7 @@ class TestPreparedStatement {
 
 export function createTestD1Database() {
   const sqlite = new Database(':memory:')
+  sqlite.exec('PRAGMA foreign_keys = ON;')
   const db = {
     prepare(sql: string) {
       return new TestPreparedStatement(sqlite, sql) as never

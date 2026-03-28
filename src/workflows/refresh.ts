@@ -117,6 +117,11 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
 
     const usersMeta = wechat.usersMeta ?? []
     counts.friendsMeta = usersMeta.length
+    const uniqueMetaVids = Array.from(new Set(usersMeta.map((m) => m.userVid)))
+
+    for (const userVid of uniqueMetaVids) {
+      await upsertFriend(env.DB, { userVid })
+    }
 
     await insertFriendMetaSnapshots(
       env.DB,
@@ -133,18 +138,7 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
 
     counts.ranking = ranking.ranking?.length ?? 0
 
-    await insertRankingSnapshots(
-      env.DB,
-      (ranking.ranking ?? []).map((r) => ({
-        userVid: r.user.userVid,
-        readingTime: r.readingTime,
-        rankWeek: r.rankWeek,
-        orderIndex: r.order,
-        capturedAt,
-      })),
-    )
-
-    // Best-effort upsert of user info included in ranking response.
+    // Snapshot tables reference friends.user_vid, so seed friend rows before inserts.
     for (const r of ranking.ranking ?? []) {
       await upsertFriend(env.DB, {
         userVid: r.user.userVid,
@@ -156,8 +150,19 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
       })
     }
 
+    await insertRankingSnapshots(
+      env.DB,
+      (ranking.ranking ?? []).map((r) => ({
+        userVid: r.user.userVid,
+        readingTime: r.readingTime,
+        rankWeek: r.rankWeek,
+        orderIndex: r.order,
+        capturedAt,
+      })),
+    )
+
     // Fetch friend profiles (name/avatar/location/...) and optionally store avatars to R2.
-    const uniqueVids = Array.from(new Set(usersMeta.map((m) => m.userVid)))
+    const uniqueVids = uniqueMetaVids
     const concurrency = 5
 
     await mapWithConcurrency(uniqueVids, concurrency, async (userVid) => {
