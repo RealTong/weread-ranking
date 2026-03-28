@@ -7,10 +7,11 @@ import {
   setSyncState,
   upsertFriend,
 } from '../storage/db'
+import { replaceMyReadBooksSnapshot } from '../storage/readbooks'
 import { getWeReadCredentials } from '../credentials'
 import { mapWithConcurrency } from '../utils/concurrency'
 import { sha256Hex } from '../utils/crypto'
-import { fetchFriendRanking, fetchFriendWechat, fetchUser } from '../weread'
+import { fetchAllMineReadBooks, fetchFriendRanking, fetchFriendWechat, fetchUser } from '../weread'
 
 type RefreshAllOptions = {
   source: RefreshSource
@@ -188,6 +189,27 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
       })
 
       counts.profiles++
+    })
+
+    const myReadBooks = await fetchAllMineReadBooks(creds)
+    await replaceMyReadBooksSnapshot(env.DB, {
+      books: myReadBooks.readBooks.map((book) => ({
+        bookId: book.bookId,
+        startReadingTime: book.startReadingTime,
+        finishTime: book.finishTime ?? null,
+        markStatus: book.markStatus,
+        progress: book.progress ?? null,
+        readtime: book.readtime ?? null,
+        title: book.title,
+        author: book.author ?? null,
+        cover: book.cover ?? null,
+      })),
+      stars: myReadBooks.stars,
+      years: myReadBooks.years,
+      ratings: myReadBooks.ratings,
+      yearPreference: myReadBooks.yearPreference,
+      totalCount: myReadBooks.totalCount,
+      sourceSynckey: myReadBooks.sourceSynckey,
     })
 
     const finishedAtMs = Date.now()

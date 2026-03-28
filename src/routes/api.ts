@@ -8,6 +8,7 @@ import {
   getLatestRanking,
   resetWeReadSyncState,
 } from '../storage/db'
+import { getMyReadBooksPage, getMyReadBooksState } from '../storage/readbooks'
 import {
   getStoredWeReadSession,
   getWeReadCredentialsStatus,
@@ -83,6 +84,48 @@ api.get('/friends', async (c) => {
 api.get('/ranking', async (c) => {
   const ranking = await getLatestRanking(c.env.DB)
   return c.json({ ok: true, ranking })
+})
+
+api.get('/readbooks', async (c) => {
+  const limitRaw = Number.parseInt(c.req.query('limit') ?? '50', 10)
+  const offsetRaw = Number.parseInt(c.req.query('offset') ?? '0', 10)
+  const markStatusRaw = c.req.query('markStatus')
+  const markStatus = markStatusRaw === undefined ? undefined : Number.parseInt(markStatusRaw, 10)
+
+  if (markStatusRaw !== undefined && !Number.isFinite(markStatus)) {
+    return c.json({ ok: false, error: 'Invalid markStatus' }, 400)
+  }
+
+  const [state, books] = await Promise.all([
+    getMyReadBooksState(c.env.DB),
+    getMyReadBooksPage(c.env.DB, {
+      limit: Number.isFinite(limitRaw) ? limitRaw : 50,
+      offset: Number.isFinite(offsetRaw) ? offsetRaw : 0,
+      markStatus,
+    }),
+  ])
+
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 50
+  const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0
+
+  return c.json({
+    ok: true,
+    latest: {
+      syncedAt: state.updatedAt,
+      syncedAtIso: state.updatedAt ? new Date(state.updatedAt).toISOString() : null,
+      sourceSynckey: state.sourceSynckey,
+      totalCount: state.totalCount,
+      stars: state.stars,
+      years: state.years,
+      ratings: state.ratings,
+      yearPreference: state.yearPreference,
+    },
+    totalCount: books.totalCount,
+    hasMore: offset + books.rows.length < books.totalCount,
+    limit,
+    offset,
+    readBooks: books.rows,
+  })
 })
 
 api.get('/friends/:userVid/history', async (c) => {

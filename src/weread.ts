@@ -124,3 +124,146 @@ export type WeReadUserResponse = {
 export async function fetchUser(creds: WeReadCredentials, userVid: number): Promise<WeReadUserResponse> {
   return fetchJson(creds, { path: '/user', query: { userVid } })
 }
+
+export type WeReadReadBookFacet = {
+  id: number | string
+  title: string
+  type: number
+}
+
+export type WeReadYearPreference = {
+  year: number
+  count: number
+  preference: string
+}
+
+export type WeReadReadBook = {
+  bookId: string
+  startReadingTime: number
+  finishTime?: number
+  markStatus: number
+  progress?: number
+  readtime?: number
+  title: string
+  author?: string
+  cover?: string
+}
+
+export type MineReadBooksResponse = {
+  stars: WeReadReadBookFacet[]
+  years: WeReadReadBookFacet[]
+  ratings: WeReadReadBookFacet[]
+  readBooks: WeReadReadBook[]
+  yearPreference: WeReadYearPreference[]
+  hasMore: number
+  totalCount: number
+  synckey?: number
+}
+
+export async function fetchMineReadBooksPage(
+  creds: WeReadCredentials,
+  params?: {
+    count?: number
+    listType?: number
+    rating?: number
+    star?: number
+    yearRange?: string
+    synckey?: number
+  },
+): Promise<MineReadBooksResponse> {
+  return fetchJson(creds, {
+    path: '/mine/readbook',
+    query: {
+      count: params?.count ?? 50,
+      listType: params?.listType ?? 3,
+      rating: params?.rating ?? 0,
+      star: params?.star ?? 0,
+      yearRange: params?.yearRange ?? '0_0',
+      vid: creds.vid,
+      synckey: params?.synckey,
+    },
+  })
+}
+
+export async function fetchAllMineReadBooks(
+  creds: WeReadCredentials,
+  options?: {
+    count?: number
+    listType?: number
+    rating?: number
+    star?: number
+    yearRange?: string
+    maxPages?: number
+  },
+): Promise<{
+  stars: WeReadReadBookFacet[]
+  years: WeReadReadBookFacet[]
+  ratings: WeReadReadBookFacet[]
+  readBooks: WeReadReadBook[]
+  yearPreference: WeReadYearPreference[]
+  totalCount: number
+  sourceSynckey: number | null
+}> {
+  const pagesMax = options?.maxPages ?? 100
+  const bookMap = new Map<string, WeReadReadBook>()
+  const seenSynckeys = new Set<number>()
+
+  let nextSynckey: number | undefined
+  let pageCount = 0
+  let stars: WeReadReadBookFacet[] = []
+  let years: WeReadReadBookFacet[] = []
+  let ratings: WeReadReadBookFacet[] = []
+  let yearPreference: WeReadYearPreference[] = []
+  let totalCount = 0
+  let sourceSynckey: number | null = null
+
+  while (pageCount < pagesMax) {
+    const page = await fetchMineReadBooksPage(creds, {
+      count: options?.count,
+      listType: options?.listType,
+      rating: options?.rating,
+      star: options?.star,
+      yearRange: options?.yearRange,
+      synckey: nextSynckey,
+    })
+    pageCount++
+
+    if (pageCount === 1) {
+      stars = page.stars ?? []
+      years = page.years ?? []
+      ratings = page.ratings ?? []
+      yearPreference = page.yearPreference ?? []
+      totalCount = page.totalCount ?? 0
+    }
+
+    for (const book of page.readBooks ?? []) {
+      bookMap.set(book.bookId, book)
+    }
+
+    sourceSynckey = page.synckey ?? sourceSynckey
+
+    if (!page.hasMore) {
+      return {
+        stars,
+        years,
+        ratings,
+        readBooks: Array.from(bookMap.values()),
+        yearPreference,
+        totalCount,
+        sourceSynckey,
+      }
+    }
+
+    if (!page.synckey) {
+      throw new Error('WeRead mine/readbook pagination returned hasMore without synckey')
+    }
+    if (seenSynckeys.has(page.synckey)) {
+      throw new Error(`WeRead mine/readbook pagination loop detected at synckey ${page.synckey}`)
+    }
+
+    seenSynckeys.add(page.synckey)
+    nextSynckey = page.synckey
+  }
+
+  throw new Error(`WeRead mine/readbook exceeded max pages (${pagesMax})`)
+}

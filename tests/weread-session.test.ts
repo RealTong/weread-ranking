@@ -211,6 +211,19 @@ describe('Incremental refresh cursors', () => {
         }
       }
 
+      if (url.pathname === '/mine/readbook') {
+        return jsonResponse({
+          stars: [],
+          years: [],
+          ratings: [],
+          yearPreference: [],
+          readBooks: [],
+          hasMore: 0,
+          totalCount: 0,
+          synckey: 77,
+        })
+      }
+
       throw new Error(`Unexpected fetch: ${url.toString()}`)
     }) as typeof fetch
   })
@@ -252,5 +265,156 @@ describe('Incremental refresh cursors', () => {
       { key: 'friend_wechat_synckey', value: '33' },
       { key: 'friend_wechat_syncver', value: '44' },
     ])
+  })
+})
+
+describe('My read books sync', () => {
+  beforeEach(() => {
+    globalThis.fetch = (async (input) => {
+      const url = toUrl(input)
+
+      if (url.pathname === '/user') {
+        return jsonResponse({
+          userVid: Number(url.searchParams.get('userVid') ?? 0),
+          name: 'reader',
+          avatar: null,
+        })
+      }
+
+      if (url.pathname === '/friend/wechat') {
+        return jsonResponse({
+          synckey: 11,
+          syncver: 22,
+          usersMeta: [{ userVid: 888, totalReadingTime: 100 }],
+        })
+      }
+
+      if (url.pathname === '/friend/ranking') {
+        return jsonResponse({
+          synckey: 55,
+          ranking: [
+            {
+              user: {
+                userVid: 888,
+                name: 'friend',
+                avatar: null,
+              },
+              readingTime: 10,
+              rankWeek: 1,
+              order: 1,
+            },
+          ],
+        })
+      }
+
+      if (url.pathname === '/mine/readbook') {
+        const synckey = url.searchParams.get('synckey')
+
+        if (!synckey) {
+          return jsonResponse({
+            stars: [{ id: 4, title: '未点评', type: 2 }],
+            years: [{ id: '0_0', title: '全部', type: 0 }],
+            ratings: [{ id: 0, title: '全部', type: 1 }],
+            yearPreference: [{ year: 2026, count: 2, preference: '' }],
+            readBooks: [
+              {
+                bookId: 'book-1',
+                startReadingTime: 1773220701,
+                markStatus: 4,
+                progress: 100,
+                readtime: 7869,
+                title: 'Finished Book',
+                author: 'Author A',
+                cover: 'https://example.com/book-1.jpg',
+              },
+              {
+                bookId: 'book-2',
+                startReadingTime: 1773220600,
+                markStatus: 2,
+                progress: 23,
+                readtime: 1234,
+                title: 'Reading Book',
+                author: 'Author B',
+                cover: 'https://example.com/book-2.jpg',
+              },
+            ],
+            hasMore: 1,
+            totalCount: 3,
+            synckey: 9001,
+          })
+        }
+
+        if (synckey === '9001') {
+          return jsonResponse({
+            stars: [{ id: 4, title: '未点评', type: 2 }],
+            years: [{ id: '0_0', title: '全部', type: 0 }],
+            ratings: [{ id: 0, title: '全部', type: 1 }],
+            yearPreference: [{ year: 2026, count: 2, preference: '' }],
+            readBooks: [
+              {
+                bookId: 'book-3',
+                startReadingTime: 1773220500,
+                finishTime: 1773220555,
+                markStatus: 4,
+                progress: 98,
+                readtime: 2222,
+                title: 'Finished Book 2',
+                author: 'Author C',
+                cover: 'https://example.com/book-3.jpg',
+              },
+            ],
+            hasMore: 0,
+            totalCount: 3,
+            synckey: 9002,
+          })
+        }
+      }
+
+      throw new Error(`Unexpected fetch: ${url.toString()}`)
+    }) as typeof fetch
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  test('syncs paged mine/readbook results into D1 and serves them from the local API', async () => {
+    const env = createEnv()
+
+    expect((await updateSession(env, { vid: '123', skey: 'new-skey' })).status).toBe(200)
+
+    const refreshResult = await refreshAll(env as never, { source: 'api' })
+    expect(refreshResult.ok).toBe(true)
+
+    const response = await worker.fetch(
+      new Request('http://worker.test/api/readbooks?limit=10&markStatus=4', {
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      totalCount: 2,
+      hasMore: false,
+      latest: {
+        sourceSynckey: 9002,
+        totalCount: 3,
+        stars: [{ id: 4, title: '未点评', type: 2 }],
+      },
+      readBooks: [
+        {
+          bookId: 'book-1',
+          markStatus: 4,
+          readingState: 'finished',
+        },
+        {
+          bookId: 'book-3',
+          markStatus: 4,
+          readingState: 'finished',
+        },
+      ],
+    })
   })
 })

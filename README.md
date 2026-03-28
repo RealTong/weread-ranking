@@ -82,6 +82,7 @@ All endpoints below require `x-api-key: <API_KEY>` if `API_KEY` is set.
 - `GET /api/aio` all-in-one payload (friends + latest ranking)
 - `GET /api/friends?limit=200&offset=0` friends with latest lifetime reading time
 - `GET /api/ranking` latest weekly ranking snapshot
+- `GET /api/readbooks?limit=50&offset=0&markStatus=4` latest cached self read-books snapshot
 - `GET /api/friends/:userVid/history?limit=200` per-friend history
 - `GET /api/avatars/:userVid` R2 avatar (or redirect to original URL)
 - `GET /api/admin/weread/session` current WeRead session status (requires `API_KEY`)
@@ -92,3 +93,5 @@ All endpoints below require `x-api-key: <API_KEY>` if `API_KEY` is set.
 - The cron schedule is configured in `wrangler.jsonc` under `triggers.crons` (default: hourly).
 - Incremental sync cursors (`synckey` / `syncver`) live in D1 and are reused across refresh runs.
 - If the bound `vid` changes, the Worker automatically resets incremental sync cursors before the next sync.
+- `refresh` will also sync your own `/mine/readbook` history into D1 and `GET /api/readbooks` reads from that local cache.
+- `markStatus=4` means finished, `markStatus=2` means currently reading.
