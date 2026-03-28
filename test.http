@@ -2,6 +2,10 @@ GET http://localhost:8787/api/aio
 x-api-key: replace-with-your-api-key
 
 ###
+GET http://localhost:8787/api/admin/weread/session
+x-api-key: replace-with-your-api-key
+
+###
 POST http://localhost:8787/api/admin/weread/session
 x-api-key: replace-with-your-api-key
 Content-Type: application/json
@@ -16,5 +20,17 @@ POST http://localhost:8787/api/refresh
 x-api-key: replace-with-your-api-key
 
 ###
+GET http://localhost:8787/api/friends?limit=50&offset=0
+x-api-key: replace-with-your-api-key
+
+###
+GET http://localhost:8787/api/ranking
+x-api-key: replace-with-your-api-key
+
+###
 GET http://localhost:8787/api/readbooks?limit=20&markStatus=4
+x-api-key: replace-with-your-api-key
+
+###
+GET http://localhost:8787/api/readbooks?limit=20&markStatus=2
 x-api-key: replace-with-your-api-key

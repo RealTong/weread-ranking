@@ -1,33 +1,46 @@
-### WeRead API - Please include the `x-api-key` header with your API key in the request.
+### Replace `x-api-key` and request body before sending requests.
 
-### 
-GET http://localhost:8787/api/aio
-x-api-key: 77OtWlqXFt6iZ3+6kYgiQMt7YUAs7otLUfJj0qFpbM4=
+### Health
+GET http://localhost:8787/health
 
-### refresh
-POST http://localhost:8787/api/refresh
-x-api-key: 77OtWlqXFt6iZ3+6kYgiQMt7YUAs7otLUfJj0qFpbM4=
-
-### 
+### Session status
 GET http://localhost:8787/api/admin/weread/session
-x-api-key: 77OtWlqXFt6iZ3+6kYgiQMt7YUAs7otLUfJj0qFpbM4=
+x-api-key: replace-with-your-api-key
 
-### 
+### Update WeRead session
 POST http://localhost:8787/api/admin/weread/session
-x-api-key: 77OtWlqXFt6iZ3+6kYgiQMt7YUAs7otLUfJj0qFpbM4=
+x-api-key: replace-with-your-api-key
 Content-Type: application/json
 
 {
-    "vid": "xxxxxx",
-    "skey": "xxxxxxx"
+  "vid": "449518091",
+  "skey": "replace-with-your-latest-skey"
 }
 
+### Trigger refresh
+POST http://localhost:8787/api/refresh
+x-api-key: replace-with-your-api-key
+
+### Aggregated friends + ranking
+GET http://localhost:8787/api/aio
+x-api-key: replace-with-your-api-key
 
 ### Friends
-GET http://localhost:8787/api/friends
-x-api-key: 77OtWlqXFt6iZ3+6kYgiQMt7YUAs7otLUfJj0qFpbM4=
-
+GET http://localhost:8787/api/friends?limit=100&offset=0
+x-api-key: replace-with-your-api-key
 
 ### Ranking
-GET http://localhost:8787/api/friends
-x-api-key: 77OtWlqXFt6iZ3+6kYgiQMt7YUAs7otLUfJj0qFpbM4=
+GET http://localhost:8787/api/ranking
+x-api-key: replace-with-your-api-key
+
+### Friend history
+GET http://localhost:8787/api/friends/123456/history?limit=50
+x-api-key: replace-with-your-api-key
+
+### Finished read books
+GET http://localhost:8787/api/readbooks?limit=20&markStatus=4
+x-api-key: replace-with-your-api-key
+
+### Reading now
+GET http://localhost:8787/api/readbooks?limit=20&markStatus=2
+x-api-key: replace-with-your-api-key
