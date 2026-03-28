@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import type { CloudflareBindings } from '../types'
 import {
   getFriendAvatarInfo,
@@ -6,13 +6,20 @@ import {
   getFriendsWithLatestMeta,
   getLatestFriendMetaCapturedAt,
   getLatestRanking,
-  setSyncState,
+  resetWeReadSyncState,
 } from '../storage/db'
-import { getWeReadCredentialsStatus, normalizeWeReadCredentials, setWeReadCredentials } from '../credentials'
+import {
+  getStoredWeReadSession,
+  getWeReadCredentialsStatus,
+  normalizeWeReadCredentials,
+  setWeReadSession,
+  shouldResetWeReadSyncState,
+} from '../credentials'
 import { refreshAll } from '../workflows/refresh'
 import { fetchUser } from '../weread'
 
 export const api = new Hono<{ Bindings: CloudflareBindings }>()
+type ApiContext = Context<{ Bindings: CloudflareBindings }>
 
 api.use('*', async (c, next) => {
   if (c.req.method === 'OPTIONS') return next()
@@ -113,13 +120,37 @@ api.post('/refresh', async (c) => {
   return c.json(result, result.ok ? 200 : 500)
 })
 
-api.get('/admin/credentials', async (c) => {
+function formatSessionStatus(
+  status: Awaited<ReturnType<typeof getWeReadCredentialsStatus>>,
+): { configured: false; source: 'none' } | {
+  configured: true
+  source: 'd1'
+  vid: string
+  updatedAt: number
+  updatedAtIso: string
+  validatedAt: number
+  validatedAtIso: string
+} {
+  if (status.source === 'none') return { configured: false, source: 'none' }
+
+  return {
+    configured: true,
+    source: 'd1',
+    vid: status.vid,
+    updatedAt: status.updatedAt,
+    updatedAtIso: new Date(status.updatedAt).toISOString(),
+    validatedAt: status.validatedAt,
+    validatedAtIso: new Date(status.validatedAt).toISOString(),
+  }
+}
+
+async function getSessionStatus(c: ApiContext) {
   if (!c.env.API_KEY) return c.json({ ok: false, error: 'API_KEY not configured' }, 400)
   const status = await getWeReadCredentialsStatus(c.env)
-  return c.json({ ok: true, status })
-})
+  return c.json({ ok: true, status: formatSessionStatus(status) })
+}
 
-api.post('/admin/credentials', async (c) => {
+async function postSession(c: ApiContext) {
   if (!c.env.API_KEY) return c.json({ ok: false, error: 'API_KEY not configured' }, 400)
 
   let body: unknown
@@ -156,24 +187,38 @@ api.post('/admin/credentials', async (c) => {
   }
 
   const resetSync = b.resetSync === true
-  if (resetSync) {
-    await Promise.all([
-      setSyncState(c.env.DB, 'friend_wechat_synckey', '0'),
-      setSyncState(c.env.DB, 'friend_wechat_syncver', '0'),
-      setSyncState(c.env.DB, 'friend_ranking_synckey', '0'),
-    ])
-  }
+  const previousSession = await getStoredWeReadSession(c.env)
+  const shouldResetSync = shouldResetWeReadSyncState(previousSession?.vid, creds.vid, resetSync)
+  const syncResetReason = resetSync ? 'requested' : previousSession?.vid && previousSession.vid !== creds.vid ? 'vid_changed' : null
 
   try {
-    const { updatedAt } = await setWeReadCredentials(c.env, creds)
+    const validatedAt = Date.now()
+    const session = await setWeReadSession(c.env, creds, { validatedAt })
+    if (shouldResetSync) {
+      await resetWeReadSyncState(c.env.DB)
+    }
     return c.json({
       ok: true,
-      updatedAt,
-      updatedAtIso: new Date(updatedAt).toISOString(),
-      resetSync,
+      session: {
+        vid: session.vid,
+        updatedAt: session.updatedAt,
+        updatedAtIso: new Date(session.updatedAt).toISOString(),
+        validatedAt: session.validatedAt,
+        validatedAtIso: new Date(session.validatedAt).toISOString(),
+      },
+      syncReset: {
+        applied: shouldResetSync,
+        reason: shouldResetSync ? syncResetReason : null,
+      },
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return c.json({ ok: false, error: message }, 500)
   }
-})
+}
+
+api.get('/admin/weread/session', getSessionStatus)
+api.post('/admin/weread/session', postSession)
+
+api.get('/admin/credentials', getSessionStatus)
+api.post('/admin/credentials', postSession)

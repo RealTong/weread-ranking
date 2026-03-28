@@ -25,6 +25,14 @@ export async function setSyncState(db: D1Database, key: SyncStateKey, value: str
     .run()
 }
 
+export async function resetWeReadSyncState(db: D1Database): Promise<void> {
+  await Promise.all([
+    setSyncState(db, 'friend_wechat_synckey', '0'),
+    setSyncState(db, 'friend_wechat_syncver', '0'),
+    setSyncState(db, 'friend_ranking_synckey', '0'),
+  ])
+}
+
 export type FriendUpsert = {
   userVid: number
   name?: string | null

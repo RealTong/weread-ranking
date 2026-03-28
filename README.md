@@ -39,34 +39,26 @@ bun run migrate:remote
 
 Local dev: copy `.dev.vars.example` → `.dev.vars` and fill:
 - `API_KEY`
-- `WEREAD_VID`
-- `WEREAD_SKEY`
-- (optional) `CRED_ENC_KEY` (for rotating skey via API)
 - (optional) `CORS_ORIGIN` (for calling API from a separate web origin)
 
 Prod: use `wrangler secret put`:
 
 ```bash
 bunx wrangler secret put API_KEY
-bunx wrangler secret put WEREAD_VID
-bunx wrangler secret put WEREAD_SKEY
-bunx wrangler secret put CRED_ENC_KEY
 ```
 
-### Optional: rotate skey without redeploy
+### Configure WeRead session
 
-If `skey` expires frequently, the simplest approach is updating `WEREAD_SKEY` via `wrangler secret put`.
-
-If you want to update it via HTTP (no redeploy), set `CRED_ENC_KEY` and call:
+After deployment, push the current `vid` + `skey` into the Worker through the admin API:
 
 ```bash
-curl -X POST "http://127.0.0.1:8787/api/admin/credentials" \
-  -H "x-api-key: $API_KEY" \
+curl -X POST "https://<your-worker>/api/admin/weread/session" \
+  -H "x-api-key: <API_KEY>" \
   -H "content-type: application/json" \
-  -d '{"vid":"<your vid>","skey":"<new skey>","resetSync":true}'
+  -d '{"vid":"449518091","skey":"your-latest-skey"}'
 ```
 
-This stores credentials encrypted in D1 and refresh jobs will prefer the D1-stored credentials.
+When `skey` rotates, call the same API again. The Worker caches the newest session in D1 and all refresh jobs reuse it.
 
 ## Run
 
@@ -92,10 +84,11 @@ All endpoints below require `x-api-key: <API_KEY>` if `API_KEY` is set.
 - `GET /api/ranking` latest weekly ranking snapshot
 - `GET /api/friends/:userVid/history?limit=200` per-friend history
 - `GET /api/avatars/:userVid` R2 avatar (or redirect to original URL)
-- `GET /api/admin/credentials` credentials status (requires `API_KEY`)
-- `POST /api/admin/credentials` set encrypted credentials in D1 (requires `API_KEY`)
+- `GET /api/admin/weread/session` current WeRead session status (requires `API_KEY`)
+- `POST /api/admin/weread/session` update cached `vid` + `skey` in D1 (requires `API_KEY`)
 
 ## Notes
 
 - The cron schedule is configured in `wrangler.jsonc` under `triggers.crons` (default: hourly).
-- If you find `synckey/syncver` must start from a non-zero cursor, set `WEREAD_FRIEND_*` vars once; after the first successful refresh they are persisted in D1.
+- Incremental sync cursors (`synckey` / `syncver`) live in D1 and are reused across refresh runs.
+- If the bound `vid` changes, the Worker automatically resets incremental sync cursors before the next sync.

@@ -82,16 +82,16 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
   const counts = { friendsMeta: 0, profiles: 0, ranking: 0, avatarsStored: 0 }
   const sync = {
     friendWechat: {
-      synckey: toIntOrDefault(env.WEREAD_FRIEND_WECHAT_SYNCKEY, 0),
-      syncver: toIntOrDefault(env.WEREAD_FRIEND_WECHAT_SYNCVER, 0),
+      synckey: 0,
+      syncver: 0,
     },
-    friendRanking: { synckey: toIntOrDefault(env.WEREAD_FRIEND_RANKING_SYNCKEY, 0) },
+    friendRanking: { synckey: 0 },
   }
 
   try {
     const creds = await getWeReadCredentials(env)
 
-    // Load previous sync state from DB (if present), else fall back to env.
+    // Load previous sync state from DB. Missing rows mean "start from zero".
     const stateRows = await env.DB
       .prepare('SELECT key, value FROM sync_state WHERE key IN (?1, ?2, ?3)')
       .bind('friend_wechat_synckey', 'friend_wechat_syncver', 'friend_ranking_synckey')
