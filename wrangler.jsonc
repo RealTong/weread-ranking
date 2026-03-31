@@ -5,7 +5,9 @@
   "compatibility_date": "2026-02-18",
   // Cron trigger: refresh WeRead data hourly (edit as you like)
   "triggers": {
-    "crons": ["0 * * * *"],
+    "crons": [
+      "0 * * * *"
+    ],
   },
   // NOTE: DO NOT put tokens in this file. Use `.dev.vars` (local) or `wrangler secret put` (prod).
   "d1_databases": [
@@ -21,4 +23,19 @@
       "bucket_name": "weread-avatars",
     },
   ],
+  "observability": {
+    "enabled": false,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
+  }
 }
