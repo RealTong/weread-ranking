@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import worker from '../src/index'
 import { refreshAll } from '../src/services/sync'
+import { upsertFriend } from '../src/storage/db'
 import { createTestD1Database } from './helpers/test-db'
 
 type TestEnv = {
@@ -891,6 +892,29 @@ describe('Route split compatibility', () => {
     expect(queryResponse.status).toBe(401)
   })
 
+  test('includes CORS headers on unauthorized API responses for allowed origins', async () => {
+    const env = {
+      ...createEnv(),
+      CORS_ORIGIN: 'https://app.example.com',
+    }
+
+    const response = await worker.fetch(
+      new Request('http://worker.test/api/friends', {
+        headers: {
+          origin: 'https://app.example.com',
+        },
+      }),
+      env as never,
+    )
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://app.example.com')
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: 'Unauthorized',
+    })
+  })
+
   test('fails closed when API_KEY is not configured', async () => {
     const envWithoutKey = { DB: createTestD1Database() }
 
@@ -963,6 +987,12 @@ describe('Route split compatibility', () => {
       }),
       env as never,
     )
+    const rankingResponse = await worker.fetch(
+      new Request('http://worker.test/api/ranking', {
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
 
     expect(aioResponse.status).toBe(200)
     await expect(aioResponse.json()).resolves.toMatchObject({
@@ -1001,6 +1031,15 @@ describe('Route split compatibility', () => {
       },
       readBooks: expect.any(Array),
     })
+
+    expect(rankingResponse.status).toBe(200)
+    await expect(rankingResponse.json()).resolves.toMatchObject({
+      ok: true,
+      ranking: {
+        capturedAt: expect.any(Number),
+        rows: expect.any(Array),
+      },
+    })
   })
 
   test('reads refreshed data back from D1 through the query API', async () => {
@@ -1034,6 +1073,25 @@ describe('Route split compatibility', () => {
           }),
         ]),
       },
+    })
+  })
+
+  test('keeps the avatar endpoint mounted in task 4', async () => {
+    const env = createEnv()
+
+    await upsertFriend(env.DB as never, { userVid: 777 })
+
+    const response = await worker.fetch(
+      new Request('http://worker.test/api/avatars/777', {
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: 'No avatar',
     })
   })
 })

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { admin, refreshHandler } from './routes/admin'
-import { apiKeyAuth } from './routes/middleware'
+import { apiKeyAuth, resolveApiCorsOrigin } from './routes/middleware'
 import { query } from './routes/query'
 import { refreshAll } from './services/sync'
 import type { CloudflareBindings } from './types'
@@ -14,19 +14,11 @@ app.get('/health', (c) => c.json({ ok: true }))
 app.use('/api/*', apiKeyAuth)
 
 app.use('/api/*', async (c, next) => {
-  const raw = c.env.CORS_ORIGIN?.trim()
-  if (!raw) return next()
-
-  const allowed = raw
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
+  if (!c.env.CORS_ORIGIN?.trim()) return next()
 
   return cors({
     origin: (origin) => {
-      if (!origin) return null
-      if (allowed.includes('*')) return origin
-      return allowed.includes(origin) ? origin : null
+      return resolveApiCorsOrigin(c.env, origin) ?? null
     },
     allowMethods: ['GET', 'POST', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'X-API-Key', 'Authorization'],
