@@ -61,6 +61,14 @@ export async function getCurrentWeReadCredentials(db: D1Database): Promise<Store
   }
 }
 
+export async function requireCurrentWeReadCredentials(db: D1Database): Promise<StoredWeReadCredentials> {
+  const credentials = await getCurrentWeReadCredentials(db)
+  if (!credentials) {
+    throw new Error('No WeRead credentials configured (POST /api/admin/weread/credentials first)')
+  }
+  return credentials
+}
+
 export async function setCurrentWeReadCredentials(
   db: D1Database,
   credentials: WeReadCredentials,

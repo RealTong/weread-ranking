@@ -3,6 +3,7 @@ import {
   getWeReadCredentialsStatus,
   normalizeWeReadCredentialsPayload,
   saveWeReadCredentials,
+  toWeReadCredentialsStatus,
   WeReadCredentialsValidationError,
 } from '../services/credentials'
 import type { CloudflareBindings } from '../types'
@@ -46,7 +47,9 @@ admin.post('/admin/weread/credentials', async (c) => {
 
   try {
     const credentials = normalizeWeReadCredentialsPayload(body)
-    const status = await saveWeReadCredentials(c.env, credentials)
+    const resetSync = (body as Record<string, unknown>).resetSync === true
+    const { credentials: stored } = await saveWeReadCredentials(c.env, credentials, { resetSync })
+    const status = toWeReadCredentialsStatus(stored)
     return c.json({ ok: true, status })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

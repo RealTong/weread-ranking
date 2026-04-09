@@ -8,7 +8,7 @@ import {
   upsertFriend,
 } from '../storage/db'
 import { replaceMyReadBooksSnapshot } from '../storage/readbooks'
-import { getWeReadCredentials } from '../credentials'
+import { getWeReadCredentials } from '../services/credentials'
 import { mapWithConcurrency } from '../utils/concurrency'
 import { sha256Hex } from '../utils/crypto'
 import { fetchAllMineReadBooks, fetchFriendRanking, fetchFriendWechat, fetchUser } from '../weread'

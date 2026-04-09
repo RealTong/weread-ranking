@@ -1,4 +1,4 @@
-import type { WeReadCredentials } from './credentials'
+import type { WeReadCredentials } from './types'
 
 const WEREAD_ORIGIN = 'https://i.weread.qq.com'
 

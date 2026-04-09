@@ -57,6 +57,55 @@ async function uploadCredentials(env: TestEnv, body: Record<string, unknown>) {
   )
 }
 
+const fullPayload = {
+  vid: '123',
+  skey: 'test-skey',
+  accessToken: 'access-token',
+  refreshToken: 'refresh-token',
+  basever: '10.1.0.80',
+  appver: '8.2.4.101',
+  v: '10.1.0.80',
+  channelId: 'AppStore',
+  userAgent: 'WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)',
+  osver: '16.7.12',
+  baseapi: 303,
+}
+
+async function seedSyncState(db: TestEnv['DB']) {
+  const now = Date.now()
+  await db
+    .prepare(
+      `INSERT INTO sync_state (key, value, updated_at)
+       VALUES (?1, ?2, ?3), (?4, ?5, ?6), (?7, ?8, ?9)`,
+    )
+    .bind(
+      'friend_wechat_synckey',
+      '9',
+      now,
+      'friend_wechat_syncver',
+      '10',
+      now,
+      'friend_ranking_synckey',
+      '11',
+      now,
+    )
+    .run()
+}
+
+async function readSyncState(db: TestEnv['DB']) {
+  const syncRows = await db
+    .prepare(
+      `SELECT key, value
+       FROM sync_state
+       WHERE key IN (?1, ?2, ?3)
+       ORDER BY key ASC`,
+    )
+    .bind('friend_ranking_synckey', 'friend_wechat_synckey', 'friend_wechat_syncver')
+    .all<{ key: string; value: string }>()
+
+  return Object.fromEntries(syncRows.results.map((row) => [row.key, row.value]))
+}
+
 const originalFetch = globalThis.fetch
 
 describe('WeRead session management', () => {
@@ -155,19 +204,7 @@ describe('WeRead credential contract', () => {
   test('stores uploaded credentials and exposes only safe status metadata', async () => {
     const env = createEnv()
 
-    const uploadResponse = await uploadCredentials(env, {
-      vid: '123',
-      skey: 'test-skey',
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      basever: '10.1.0.80',
-      appver: '8.2.4.101',
-      v: '10.1.0.80',
-      channelId: 'AppStore',
-      userAgent: 'WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)',
-      osver: '16.7.12',
-      baseapi: 303,
-    })
+    const uploadResponse = await uploadCredentials(env, fullPayload)
 
     expect(uploadResponse.status).toBe(200)
     const uploadJson = await uploadResponse.json()
@@ -209,16 +246,7 @@ describe('WeRead credential contract', () => {
     const env = createEnv()
 
     const response = await uploadCredentials(env, {
-      vid: '123',
-      skey: 'test-skey',
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      basever: '10.1.0.80',
-      appver: '8.2.4.101',
-      v: '10.1.0.80',
-      channelId: 'AppStore',
-      userAgent: 'WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)',
-      osver: '16.7.12',
+      ...fullPayload,
       baseapi: '303',
     })
 
@@ -269,6 +297,33 @@ describe('WeRead credential contract', () => {
         )
         .run(),
     ).rejects.toThrow(/constraint/i)
+  })
+
+  test('resets incremental sync cursors when the uploaded vid changes', async () => {
+    const env = createEnv()
+
+    await seedSyncState(env.DB)
+    expect((await uploadCredentials(env, fullPayload)).status).toBe(200)
+    expect((await uploadCredentials(env, { ...fullPayload, vid: '456' })).status).toBe(200)
+
+    expect(await readSyncState(env.DB)).toEqual({
+      friend_wechat_synckey: '0',
+      friend_wechat_syncver: '0',
+      friend_ranking_synckey: '0',
+    })
+  })
+
+  test('resets incremental sync cursors when resetSync is true', async () => {
+    const env = createEnv()
+
+    await seedSyncState(env.DB)
+    expect((await uploadCredentials(env, { ...fullPayload, resetSync: true })).status).toBe(200)
+
+    expect(await readSyncState(env.DB)).toEqual({
+      friend_wechat_synckey: '0',
+      friend_wechat_syncver: '0',
+      friend_ranking_synckey: '0',
+    })
   })
 })
 

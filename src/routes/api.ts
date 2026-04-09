@@ -6,16 +6,13 @@ import {
   getFriendsWithLatestMeta,
   getLatestFriendMetaCapturedAt,
   getLatestRanking,
-  resetWeReadSyncState,
 } from '../storage/db'
 import { getMyReadBooksPage, getMyReadBooksState } from '../storage/readbooks'
 import {
-  getStoredWeReadSession,
   getWeReadCredentialsStatus,
-  normalizeWeReadCredentials,
-  setWeReadSession,
-  shouldResetWeReadSyncState,
-} from '../credentials'
+  normalizeLegacyWeReadSessionPayload,
+  saveWeReadCredentials,
+} from '../services/credentials'
 import { refreshAll } from '../workflows/refresh'
 import { fetchUser } from '../weread'
 
@@ -182,8 +179,8 @@ function formatSessionStatus(
     vid: status.vid,
     updatedAt: status.updatedAt,
     updatedAtIso: new Date(status.updatedAt).toISOString(),
-    validatedAt: status.validatedAt,
-    validatedAtIso: new Date(status.validatedAt).toISOString(),
+    validatedAt: status.updatedAt,
+    validatedAtIso: new Date(status.updatedAt).toISOString(),
   }
 }
 
@@ -206,14 +203,7 @@ async function postSession(c: ApiContext) {
   const b = body as Record<string, unknown>
   let creds
   try {
-    creds = normalizeWeReadCredentials({
-      vid: typeof b.vid === 'string' ? b.vid : '',
-      skey: typeof b.skey === 'string' ? b.skey : '',
-      basever: typeof b.basever === 'string' ? b.basever : undefined,
-      v: typeof b.v === 'string' ? b.v : undefined,
-      channelId: typeof b.channelId === 'string' ? b.channelId : undefined,
-      userAgent: typeof b.userAgent === 'string' ? b.userAgent : undefined,
-    })
+    creds = normalizeLegacyWeReadSessionPayload(body)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return c.json({ ok: false, error: message }, 400)
@@ -230,29 +220,19 @@ async function postSession(c: ApiContext) {
   }
 
   const resetSync = b.resetSync === true
-  const previousSession = await getStoredWeReadSession(c.env)
-  const shouldResetSync = shouldResetWeReadSyncState(previousSession?.vid, creds.vid, resetSync)
-  const syncResetReason = resetSync ? 'requested' : previousSession?.vid && previousSession.vid !== creds.vid ? 'vid_changed' : null
 
   try {
-    const validatedAt = Date.now()
-    const session = await setWeReadSession(c.env, creds, { validatedAt })
-    if (shouldResetSync) {
-      await resetWeReadSyncState(c.env.DB)
-    }
+    const { credentials: session, syncReset } = await saveWeReadCredentials(c.env, creds, { resetSync })
     return c.json({
       ok: true,
       session: {
         vid: session.vid,
         updatedAt: session.updatedAt,
         updatedAtIso: new Date(session.updatedAt).toISOString(),
-        validatedAt: session.validatedAt,
-        validatedAtIso: new Date(session.validatedAt).toISOString(),
+        validatedAt: session.updatedAt,
+        validatedAtIso: new Date(session.updatedAt).toISOString(),
       },
-      syncReset: {
-        applied: shouldResetSync,
-        reason: shouldResetSync ? syncResetReason : null,
-      },
+      syncReset,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
