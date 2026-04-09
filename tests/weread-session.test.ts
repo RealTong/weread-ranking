@@ -304,7 +304,16 @@ describe('WeRead credential contract', () => {
 
     await seedSyncState(env.DB)
     expect((await uploadCredentials(env, fullPayload)).status).toBe(200)
-    expect((await uploadCredentials(env, { ...fullPayload, vid: '456' })).status).toBe(200)
+    const secondResponse = await uploadCredentials(env, { ...fullPayload, vid: '456' })
+
+    expect(secondResponse.status).toBe(200)
+    await expect(secondResponse.json()).resolves.toMatchObject({
+      ok: true,
+      syncReset: {
+        applied: true,
+        reason: 'vid_changed',
+      },
+    })
 
     expect(await readSyncState(env.DB)).toEqual({
       friend_wechat_synckey: '0',
@@ -317,7 +326,16 @@ describe('WeRead credential contract', () => {
     const env = createEnv()
 
     await seedSyncState(env.DB)
-    expect((await uploadCredentials(env, { ...fullPayload, resetSync: true })).status).toBe(200)
+    const response = await uploadCredentials(env, { ...fullPayload, resetSync: true })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      syncReset: {
+        applied: true,
+        reason: 'requested',
+      },
+    })
 
     expect(await readSyncState(env.DB)).toEqual({
       friend_wechat_synckey: '0',

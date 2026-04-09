@@ -48,9 +48,9 @@ admin.post('/admin/weread/credentials', async (c) => {
   try {
     const credentials = normalizeWeReadCredentialsPayload(body)
     const resetSync = (body as Record<string, unknown>).resetSync === true
-    const { credentials: stored } = await saveWeReadCredentials(c.env, credentials, { resetSync })
+    const { credentials: stored, syncReset } = await saveWeReadCredentials(c.env, credentials, { resetSync })
     const status = toWeReadCredentialsStatus(stored)
-    return c.json({ ok: true, status })
+    return c.json({ ok: true, status, syncReset })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (error instanceof WeReadCredentialsValidationError) {
