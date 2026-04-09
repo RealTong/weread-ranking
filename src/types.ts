@@ -3,7 +3,6 @@ export type CloudflareBindings = {
   CORS_ORIGIN?: string
 
   DB: D1Database
-  AVATARS?: R2Bucket
 }
 
 export type RefreshSource = 'api' | 'cron'

@@ -3,44 +3,57 @@
 ### Health
 GET http://localhost:8787/health
 
-### Session status
-GET http://localhost:8787/api/admin/weread/session
+### Credential status
+GET http://localhost:8787/api/admin/weread/credentials
 x-api-key: replace-with-your-api-key
 
-### Update WeRead session
-POST http://localhost:8787/api/admin/weread/session
+### Upload WeRead credentials
+POST http://localhost:8787/api/admin/weread/credentials
 x-api-key: replace-with-your-api-key
 Content-Type: application/json
 
 {
   "vid": "449518091",
-  "skey": "replace-with-your-latest-skey"
+  "skey": "replace-with-your-latest-skey",
+  "accessToken": "replace-with-access-token",
+  "refreshToken": "replace-with-refresh-token",
+  "basever": "10.1.0.80",
+  "appver": "8.2.4.101",
+  "v": "10.1.0.80",
+  "channelId": "AppStore",
+  "userAgent": "WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)",
+  "osver": "16.7.12",
+  "baseapi": 303
 }
 
-### Trigger refresh
+### Trigger refresh (primary admin endpoint)
+POST http://localhost:8787/api/admin/refresh
+x-api-key: replace-with-your-api-key
+
+### Trigger refresh (compatibility alias)
 POST http://localhost:8787/api/refresh
 x-api-key: replace-with-your-api-key
 
-### Aggregated friends + ranking
+### Aggregated friends + ranking from cached D1 data
 GET http://localhost:8787/api/aio
 x-api-key: replace-with-your-api-key
 
-### Friends
+### Friends from cached D1 data
 GET http://localhost:8787/api/friends?limit=100&offset=0
 x-api-key: replace-with-your-api-key
 
-### Ranking
+### Ranking from cached D1 data
 GET http://localhost:8787/api/ranking
 x-api-key: replace-with-your-api-key
 
-### Friend history
+### Friend history from cached D1 data
 GET http://localhost:8787/api/friends/123456/history?limit=50
 x-api-key: replace-with-your-api-key
 
-### Finished read books
+### Finished read books from cached D1 data
 GET http://localhost:8787/api/readbooks?limit=20&markStatus=4
 x-api-key: replace-with-your-api-key
 
-### Reading now
+### Reading now from cached D1 data
 GET http://localhost:8787/api/readbooks?limit=20&markStatus=2
 x-api-key: replace-with-your-api-key

@@ -17,12 +17,6 @@
       "database_id": "5b2527dc-0e10-473b-a08d-f99605c1733a",
     },
   ],
-  "r2_buckets": [
-    {
-      "binding": "AVATARS",
-      "bucket_name": "weread-avatars",
-    },
-  ],
   "observability": {
     "enabled": false,
     "head_sampling_rate": 1,

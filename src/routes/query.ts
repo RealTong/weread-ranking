@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 import type { CloudflareBindings } from '../types'
 import {
-  getFriendAvatarInfo,
   getFriendHistory,
   getFriendsWithLatestMeta,
   getLatestFriendMetaCapturedAt,
@@ -112,25 +111,4 @@ query.get('/friends/:userVid/history', async (c) => {
   const limit = Number.isFinite(limitRaw) ? limitRaw : 200
   const history = await getFriendHistory(c.env.DB, userVid, { limit })
   return c.json({ ok: true, history })
-})
-
-query.get('/avatars/:userVid', async (c) => {
-  const userVid = Number.parseInt(c.req.param('userVid'), 10)
-  if (!Number.isFinite(userVid)) return c.json({ ok: false, error: 'Invalid userVid' }, 400)
-
-  const info = await getFriendAvatarInfo(c.env.DB, userVid)
-  if (!info) return c.json({ ok: false, error: 'Not found' }, 404)
-
-  if (c.env.AVATARS && info.avatarR2Key) {
-    const obj = await c.env.AVATARS.get(info.avatarR2Key)
-    if (obj) {
-      const headers = new Headers()
-      obj.writeHttpMetadata(headers)
-      headers.set('etag', obj.httpEtag)
-      return new Response(obj.body, { headers })
-    }
-  }
-
-  if (info.avatarUrl) return c.redirect(info.avatarUrl, 302)
-  return c.json({ ok: false, error: 'No avatar' }, 404)
 })

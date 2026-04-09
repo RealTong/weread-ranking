@@ -8,7 +8,6 @@ type TestEnv = {
   API_KEY: string
   DB: ReturnType<typeof createTestD1Database>
   CORS_ORIGIN?: string
-  AVATARS?: R2Bucket
 }
 
 function createEnv(): TestEnv {
@@ -1076,22 +1075,20 @@ describe('Route split compatibility', () => {
     })
   })
 
-  test('keeps the avatar endpoint mounted in task 4', async () => {
+  test('does not expose the removed avatar endpoint', async () => {
     const env = createEnv()
 
-    await upsertFriend(env.DB as never, { userVid: 777 })
+    await upsertFriend(env.DB as never, { userVid: 888 })
 
     const response = await worker.fetch(
-      new Request('http://worker.test/api/avatars/777', {
+      new Request('http://worker.test/api/avatars/888', {
         headers: { 'x-api-key': env.API_KEY },
       }),
       env as never,
     )
 
     expect(response.status).toBe(404)
-    await expect(response.json()).resolves.toMatchObject({
-      ok: false,
-      error: 'No avatar',
-    })
+    expect(response.headers.get('content-type')).toContain('text/plain')
+    await expect(response.text()).resolves.toBe('404 Not Found')
   })
 })

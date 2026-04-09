@@ -98,16 +98,6 @@ export async function upsertFriend(db: D1Database, friend: FriendUpsert): Promis
     .run()
 }
 
-export async function getFriendAvatarInfo(
-  db: D1Database,
-  userVid: number,
-): Promise<{ avatarUrl: string | null; avatarR2Key: string | null } | null> {
-  return await db
-    .prepare('SELECT avatar_url as avatarUrl, avatar_r2_key as avatarR2Key FROM friends WHERE user_vid = ?1')
-    .bind(userVid)
-    .first<{ avatarUrl: string | null; avatarR2Key: string | null }>()
-}
-
 export type FriendMetaSnapshot = {
   userVid: number
   totalReadingTime: number

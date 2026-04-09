@@ -9,8 +9,8 @@
 
 这个项目的设计是：
 
-- 外部脚本或手动操作负责获取最新 `vid + skey`
-- Worker 提供一个更新 session 的 API，把最新凭证写入 D1
+- 外部脚本或手动操作负责获取最新微信读书完整凭证
+- Worker 提供一个凭证写入 API，把最新凭证写入 D1
 - Worker 定时同步微信读书数据到 D1
 - Web、脚本、自动化任务都只读本项目自己的 API
 
@@ -19,8 +19,7 @@
 - 同步微信读书好友阅读总时长
 - 同步好友周榜数据
 - 同步你的个人历史书单 `/mine/readbook`
-- 将头像缓存到 R2
-- 通过 D1 持久化 session、同步游标和快照数据
+- 通过 D1 持久化微信读书凭证、同步游标和快照数据
 - 提供可直接消费的 HTTP API
 
 ## 技术栈
@@ -28,16 +27,15 @@
 - Cloudflare Workers
 - Hono
 - Cloudflare D1
-- Cloudflare R2
 - Bun
 
 ## 数据流
 
-1. 通过 `POST /api/admin/weread/session` 更新当前可用的 `vid + skey`
-2. `POST /api/refresh` 或定时 cron 触发同步
-3. Worker 从 D1 读取当前 session
+1. 通过 `POST /api/admin/weread/credentials` 更新当前可用的微信读书完整凭证
+2. `POST /api/admin/refresh` 或兼容别名 `POST /api/refresh` 触发同步
+3. Worker 从 D1 读取当前凭证
 4. Worker 拉取微信读书数据并写入 D1
-5. 业务侧通过 `/api/aio`、`/api/friends`、`/api/ranking`、`/api/readbooks` 读取本地缓存数据
+5. 业务侧通过 `/api/aio`、`/api/friends`、`/api/ranking`、`/api/readbooks` 读取 D1 本地缓存数据
 
 ## 前置要求
 
@@ -53,7 +51,7 @@
 bun install
 ```
 
-### 2. 创建 D1 和 R2
+### 2. 创建 D1
 
 先创建 D1 数据库：
 
@@ -61,22 +59,13 @@ bun install
 bunx wrangler d1 create weread-ranking
 ```
 
-如果你需要头像缓存，再创建一个 R2 bucket：
-
-```bash
-bunx wrangler r2 bucket create weread-avatars
-```
-
 ### 3. 更新 `wrangler.jsonc`
 
 把你自己的 D1 `database_id` 填进去。
 
-如果你创建了新的 bucket 名称，也一起改掉。
-
 默认需要确认这些字段：
 
 - `d1_databases[0].database_id`
-- `r2_buckets[0].bucket_name`
 - `triggers.crons`
 
 默认 cron 是每小时执行一次：
@@ -137,31 +126,56 @@ http://localhost:8787
 
 本项目第一次启动后，建议按下面顺序执行。
 
-### 1. 更新微信读书 session
+### 1. 上传微信读书完整凭证
 
-拿到最新的 `vid + skey` 后，调用：
+拿到最新的完整凭证 JSON 后，调用：
 
 ```bash
-curl -X POST "http://localhost:8787/api/admin/weread/session" \
+curl -X POST "http://localhost:8787/api/admin/weread/credentials" \
   -H "x-api-key: <API_KEY>" \
   -H "content-type: application/json" \
   -d '{
     "vid": "449518091",
-    "skey": "your-latest-skey"
+    "skey": "your-latest-skey",
+    "accessToken": "your-access-token",
+    "refreshToken": "your-refresh-token",
+    "basever": "10.1.0.80",
+    "appver": "8.2.4.101",
+    "v": "10.1.0.80",
+    "channelId": "AppStore",
+    "userAgent": "WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)",
+    "osver": "16.7.12",
+    "baseapi": 303
   }'
 ```
 
-如果你更换了账号，或者希望强制从头同步游标，可以加上：
+如果你更换了账号，或者希望强制从头同步游标，可以加上 `resetSync: true`：
 
 ```json
 {
   "vid": "449518091",
   "skey": "your-latest-skey",
+  "accessToken": "your-access-token",
+  "refreshToken": "your-refresh-token",
+  "basever": "10.1.0.80",
+  "appver": "8.2.4.101",
+  "v": "10.1.0.80",
+  "channelId": "AppStore",
+  "userAgent": "WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)",
+  "osver": "16.7.12",
+  "baseapi": 303,
   "resetSync": true
 }
 ```
 
 ### 2. 手动触发一次同步
+
+```bash
+curl -X POST "http://localhost:8787/api/admin/refresh" \
+  -H "x-api-key: <API_KEY>"
+```
+
+兼容旧调用方式时，也可以继续使用：
 
 ```bash
 curl -X POST "http://localhost:8787/api/refresh" \
@@ -189,28 +203,37 @@ bun run deploy
 bunx wrangler secret put API_KEY
 ```
 
-部署完成后，调用线上地址更新 session：
+部署完成后，调用线上地址上传凭证：
 
 ```bash
-curl -X POST "https://<your-worker-domain>/api/admin/weread/session" \
+curl -X POST "https://<your-worker-domain>/api/admin/weread/credentials" \
   -H "x-api-key: <API_KEY>" \
   -H "content-type: application/json" \
   -d '{
     "vid": "449518091",
-    "skey": "your-latest-skey"
+    "skey": "your-latest-skey",
+    "accessToken": "your-access-token",
+    "refreshToken": "your-refresh-token",
+    "basever": "10.1.0.80",
+    "appver": "8.2.4.101",
+    "v": "10.1.0.80",
+    "channelId": "AppStore",
+    "userAgent": "WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)",
+    "osver": "16.7.12",
+    "baseapi": 303
   }'
 ```
 
-## Session 更新说明
+## 凭证更新说明
 
-微信读书的 `skey` 有效期较短，这个项目不依赖长期环境变量来保存它。
+微信读书凭证可能变化较快，这个项目不依赖长期环境变量来保存它。
 
 推荐做法：
 
-- 外部脚本定期获取新的 `skey`
-- 调用 `POST /api/admin/weread/session`
-- Worker 把最新 session 写入 D1
-- 后续定时同步始终使用 D1 中的最新 session
+- 外部脚本定期获取新的完整凭证 JSON
+- 调用 `POST /api/admin/weread/credentials`
+- Worker 把最新凭证写入 D1
+- 后续定时同步始终使用 D1 中的最新凭证
 
 也就是说，真正需要长期保存的环境变量只有：
 
@@ -219,30 +242,45 @@ curl -X POST "https://<your-worker-domain>/api/admin/weread/session" \
 
 ## API 说明
 
-所有接口都支持：
+所有 `/api/*` 接口都要求：
 
 ```http
 x-api-key: <API_KEY>
 ```
 
-### `POST /api/admin/weread/session`
+所有查询接口都只读取 D1 中的缓存数据，不会实时代理微信读书请求。
 
-更新当前微信读书 session。
+### `POST /api/admin/weread/credentials`
+
+更新当前微信读书完整凭证。
 
 请求体：
 
 ```json
 {
   "vid": "449518091",
-  "skey": "your-latest-skey"
+  "skey": "your-latest-skey",
+  "accessToken": "your-access-token",
+  "refreshToken": "your-refresh-token",
+  "basever": "10.1.0.80",
+  "appver": "8.2.4.101",
+  "v": "10.1.0.80",
+  "channelId": "AppStore",
+  "userAgent": "WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)",
+  "osver": "16.7.12",
+  "baseapi": 303
 }
 ```
 
-### `GET /api/admin/weread/session`
+可选字段：
 
-查看当前 session 是否已配置，以及最近更新时间。
+- `resetSync: true` 会重置增量同步游标
 
-### `POST /api/refresh`
+### `GET /api/admin/weread/credentials`
+
+查看当前凭证是否已配置，以及最近更新时间。
+
+### `POST /api/admin/refresh`
 
 立即执行一次同步。
 
@@ -251,11 +289,14 @@ x-api-key: <API_KEY>
 - 好友阅读总时长
 - 好友排行榜
 - 你的个人历史书单
-- 好友头像缓存
+
+### `POST /api/refresh`
+
+兼容旧调用方式的别名，行为与 `POST /api/admin/refresh` 一致。
 
 ### `GET /api/aio`
 
-返回聚合后的好友信息和最新周榜，适合前端一次性加载。
+返回聚合后的好友信息和最新周榜，适合前端一次性加载。数据来自 D1 缓存。
 
 示例：
 
@@ -266,7 +307,7 @@ curl "http://localhost:8787/api/aio" \
 
 ### `GET /api/friends`
 
-返回好友列表和最新累计阅读时长。
+返回好友列表和最新累计阅读时长。数据来自 D1 缓存。
 
 查询参数：
 
@@ -282,7 +323,7 @@ curl "http://localhost:8787/api/friends?limit=100&offset=0" \
 
 ### `GET /api/ranking`
 
-返回最新一次同步得到的好友周榜。
+返回最新一次同步得到的好友周榜。数据来自 D1 缓存。
 
 示例：
 
@@ -293,7 +334,7 @@ curl "http://localhost:8787/api/ranking" \
 
 ### `GET /api/friends/:userVid/history`
 
-返回某个好友的历史阅读变化。
+返回某个好友的历史阅读变化。数据来自 D1 缓存。
 
 查询参数：
 
@@ -332,10 +373,6 @@ curl "http://localhost:8787/api/readbooks?limit=20&markStatus=4" \
 curl "http://localhost:8787/api/readbooks?limit=20&markStatus=2" \
   -H "x-api-key: <API_KEY>"
 ```
-
-### `GET /api/avatars/:userVid`
-
-优先从 R2 返回头像；如果 R2 中没有缓存，则重定向到原始头像地址。
 
 ## 调试请求示例
 
