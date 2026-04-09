@@ -136,6 +136,13 @@ The refactor continues using the existing tables for cached business data:
 
 These tables already match the desired operating model and do not require a conceptual redesign.
 
+For `friends`, the refactor should narrow active population to the fields already available from sync sources used in scope:
+
+- actively populated: `user_vid`, `name`, `gender`, `avatar_url`, `is_wechat_friend`, `is_hide`
+- retained but not actively refreshed in this refactor: `avatar_r2_key`, `location`, `signature`
+
+This keeps schema churn small while making the new sync behavior explicit. Legacy nullable columns may remain in the table until a later cleanup migration.
+
 ## API Design
 
 All endpoints remain protected with `x-api-key`.
@@ -209,6 +216,11 @@ Behavior:
 - Returns a structured sync result object.
 - Fails cleanly if no credentials are configured.
 
+Compatibility:
+
+- Keep `POST /api/refresh` as a compatibility alias that calls the same handler.
+- Treat `/api/admin/refresh` as the canonical admin route after the refactor.
+
 ### Query Endpoints
 
 The following endpoints remain read-only wrappers over D1:
@@ -222,6 +234,10 @@ The following endpoints remain read-only wrappers over D1:
 Each endpoint continues requiring `x-api-key`.
 
 The avatar endpoint should be removed in this refactor because avatar caching is explicitly out of scope.
+
+For compatibility, `/api/friends` and `/api/aio` may continue returning the existing friend object shape, but callers should expect `avatarR2Key`, `location`, and `signature` to remain nullable because this refactor no longer refreshes them.
+
+The implementation plan should preserve current top-level response envelopes and pagination parameters for `/api/aio`, `/api/friends`, `/api/ranking`, and `/api/readbooks` unless a change is required by the explicit scope decisions in this document.
 
 ## Sync Flow
 
@@ -239,10 +255,17 @@ Both cron and manual refresh must call the same sync function.
 8. Call `/friend/ranking`.
 9. Persist updated `friend_ranking_synckey`.
 10. Upsert friend identity fields available from ranking data and write `ranking_snapshots`.
-11. Call `/mine/readbook` paging flow and replace the local read-book snapshot tables.
-12. Finish the `refresh_runs` record with success counts.
+11. Do not call `/user` for per-friend profile enrichment in this refactor.
+12. Call `/mine/readbook` paging flow and replace the local read-book snapshot tables.
+13. Finish the `refresh_runs` record with success counts.
 
 The sync should remain incremental where the WeRead API supports cursors.
+
+The intended friend-data behavior after refactor is:
+
+- `name`, `gender`, `avatar_url`, `is_wechat_friend`, and `is_hide` are sourced from ranking responses when present.
+- `totalReadingTime` history remains sourced from `/friend/wechat` snapshots.
+- `location`, `signature`, and any R2-backed avatar data are not refreshed.
 
 ### Reset Behavior
 
