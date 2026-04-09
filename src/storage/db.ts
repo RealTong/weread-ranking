@@ -13,6 +13,21 @@ export async function getSyncState(db: D1Database, key: SyncStateKey): Promise<s
   return row?.value ?? null
 }
 
+export async function getWeReadSyncState(db: D1Database): Promise<Record<SyncStateKey, string | null>> {
+  const rows = await db
+    .prepare('SELECT key, value FROM sync_state WHERE key IN (?1, ?2, ?3)')
+    .bind('friend_wechat_synckey', 'friend_wechat_syncver', 'friend_ranking_synckey')
+    .all<{ key: SyncStateKey; value: string }>()
+
+  const state = new Map<SyncStateKey, string>((rows.results ?? []).map((row) => [row.key, row.value]))
+
+  return {
+    friend_wechat_synckey: state.get('friend_wechat_synckey') ?? null,
+    friend_wechat_syncver: state.get('friend_wechat_syncver') ?? null,
+    friend_ranking_synckey: state.get('friend_ranking_synckey') ?? null,
+  }
+}
+
 export async function setSyncState(db: D1Database, key: SyncStateKey, value: string): Promise<void> {
   const now = Date.now()
   await db

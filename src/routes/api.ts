@@ -13,8 +13,8 @@ import {
   normalizeLegacyWeReadSessionPayload,
   saveWeReadCredentials,
 } from '../services/credentials'
-import { refreshAll } from '../workflows/refresh'
-import { fetchUser } from '../weread'
+import { refreshAll } from '../services/sync'
+import { fetchUser } from '../integrations/weread'
 
 export const api = new Hono<{ Bindings: CloudflareBindings }>()
 type ApiContext = Context<{ Bindings: CloudflareBindings }>

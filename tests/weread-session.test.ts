@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import worker from '../src/index'
-import { refreshAll } from '../src/workflows/refresh'
+import { refreshAll } from '../src/services/sync'
 import { createTestD1Database } from './helpers/test-db'
 
 type TestEnv = {
@@ -443,7 +443,7 @@ describe('Incremental refresh cursors', () => {
   test('persists sync cursors in D1 and reuses them on the next refresh', async () => {
     const env = createEnv()
 
-    expect((await updateSession(env, { vid: '123', skey: 'new-skey' })).status).toBe(200)
+    expect((await uploadCredentials(env, fullPayload)).status).toBe(200)
 
     const firstRun = await refreshAll(env as never, { source: 'api' })
     expect(firstRun.ok).toBe(true)
@@ -473,6 +473,88 @@ describe('Incremental refresh cursors', () => {
       { key: 'friend_wechat_synckey', value: '33' },
       { key: 'friend_wechat_syncver', value: '44' },
     ])
+  })
+
+  test('reuses stored credentials for refresh and does not fetch per-friend profiles', async () => {
+    const env = createEnv()
+    const seenHeaders: string[] = []
+
+    globalThis.fetch = (async (input, init) => {
+      const request = input instanceof Request ? input : new Request(String(input), init)
+      const url = new URL(request.url)
+
+      if (url.pathname === '/user') {
+        throw new Error('Unexpected fetch: /user')
+      }
+
+      if (url.pathname === '/friend/wechat') {
+        seenHeaders.push(request.headers.get('accessToken') ?? '')
+        expect(request.headers.get('vid')).toBe('123')
+        expect(request.headers.get('skey')).toBe('test-skey')
+        return jsonResponse({
+          synckey: 11,
+          syncver: 22,
+          usersMeta: [{ userVid: 888, totalReadingTime: 100 }],
+        })
+      }
+
+      if (url.pathname === '/friend/ranking') {
+        expect(request.headers.get('accessToken')).toBe('access-token')
+        expect(request.headers.get('refreshToken')).toBe('refresh-token')
+        expect(request.headers.get('basever')).toBe('10.1.0.80')
+        expect(request.headers.get('appver')).toBe('8.2.4.101')
+        expect(request.headers.get('v')).toBe('10.1.0.80')
+        expect(request.headers.get('channelId')).toBe('AppStore')
+        expect(request.headers.get('user-agent')).toBe('WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)')
+        expect(request.headers.get('osver')).toBe('16.7.12')
+        expect(request.headers.get('baseapi')).toBe('303')
+        return jsonResponse({
+          synckey: 55,
+          ranking: [
+            {
+              user: {
+                userVid: 888,
+                name: 'friend',
+                avatar: null,
+              },
+              readingTime: 10,
+              rankWeek: 1,
+              order: 1,
+            },
+          ],
+        })
+      }
+
+      if (url.pathname === '/mine/readbook') {
+        return jsonResponse({
+          stars: [],
+          years: [],
+          ratings: [],
+          yearPreference: [],
+          readBooks: [],
+          hasMore: 0,
+          totalCount: 0,
+          synckey: 77,
+        })
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    await uploadCredentials(env, fullPayload)
+    const result = await refreshAll(env as never, { source: 'api' })
+
+    expect(result.ok).toBe(true)
+    expect(seenHeaders).toEqual(['access-token'])
+  })
+
+  test('fails refresh cleanly when no current credentials exist', async () => {
+    const env = createEnv()
+
+    const result = await refreshAll(env as never, { source: 'api' })
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('No credentials configured')
   })
 })
 
@@ -589,7 +671,7 @@ describe('My read books sync', () => {
   test('syncs paged mine/readbook results into D1 and serves them from the local API', async () => {
     const env = createEnv()
 
-    expect((await updateSession(env, { vid: '123', skey: 'new-skey' })).status).toBe(200)
+    expect((await uploadCredentials(env, fullPayload)).status).toBe(200)
 
     const refreshResult = await refreshAll(env as never, { source: 'api' })
     expect(refreshResult.ok).toBe(true)

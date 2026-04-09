@@ -1,4 +1,4 @@
-import type { WeReadCredentials } from './types'
+import type { WeReadCredentials } from '../types'
 
 const WEREAD_ORIGIN = 'https://i.weread.qq.com'
 
@@ -13,23 +13,29 @@ function buildHeaders(creds: WeReadCredentials): HeadersInit {
     accept: '*/*',
     vid: creds.vid,
     skey: creds.skey,
+    accessToken: creds.accessToken,
+    refreshToken: creds.refreshToken,
     basever: creds.basever,
+    appver: creds.appver,
     v: creds.v,
     channelId: creds.channelId,
     'user-agent': creds.userAgent,
+    osver: creds.osver,
+    baseapi: String(creds.baseapi),
   }
 }
 
 async function fetchJson<T>(creds: WeReadCredentials, options: FetchJsonOptions): Promise<T> {
   const url = new URL(options.path, WEREAD_ORIGIN)
-  for (const [k, v] of Object.entries(options.query ?? {})) {
-    if (v === undefined) continue
-    url.searchParams.set(k, String(v))
+  for (const [key, value] of Object.entries(options.query ?? {})) {
+    if (value === undefined) continue
+    url.searchParams.set(key, String(value))
   }
 
   const controller = new AbortController()
   const timeoutMs = options.timeoutMs ?? 15_000
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
   try {
     const res = await fetch(url, {
       headers: buildHeaders(creds),
@@ -81,7 +87,7 @@ export type FriendRankingEntry = {
     userVid: number
     name?: string
     gender?: number
-    avatar?: string
+    avatar?: string | null
     isWeChatFriend?: number
     isHide?: number
   }
@@ -110,7 +116,7 @@ export type WeReadUserResponse = {
   userVid: number
   name?: string
   gender?: number
-  avatar?: string
+  avatar?: string | null
   location?: string
   isV?: number
   isDeepV?: boolean

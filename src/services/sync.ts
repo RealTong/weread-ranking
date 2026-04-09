@@ -1,17 +1,16 @@
-import type { CloudflareBindings, RefreshSource } from '../types'
+import { fetchAllMineReadBooks, fetchFriendRanking, fetchFriendWechat } from '../integrations/weread'
 import {
   createRefreshRun,
   finishRefreshRun,
+  getWeReadSyncState,
   insertFriendMetaSnapshots,
   insertRankingSnapshots,
   setSyncState,
   upsertFriend,
 } from '../storage/db'
 import { replaceMyReadBooksSnapshot } from '../storage/readbooks'
-import { getWeReadCredentials } from '../services/credentials'
-import { mapWithConcurrency } from '../utils/concurrency'
-import { sha256Hex } from '../utils/crypto'
-import { fetchAllMineReadBooks, fetchFriendRanking, fetchFriendWechat, fetchUser } from '../weread'
+import { getWeReadCredentials } from './credentials'
+import type { CloudflareBindings, RefreshSource } from '../types'
 
 type RefreshAllOptions = {
   source: RefreshSource
@@ -42,27 +41,16 @@ function toIntOrDefault(value: string | null | undefined, fallback: number): num
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
-async function storeAvatarIfNeeded(
-  env: CloudflareBindings,
-  params: { userVid: number; avatarUrl: string },
-): Promise<{ avatarR2Key: string | null; stored: boolean }> {
-  if (!env.AVATARS) return { avatarR2Key: null, stored: false }
-
-  const hash = await sha256Hex(params.avatarUrl)
-  const key = `avatars/${params.userVid}/${hash}`
-  const existing = await env.AVATARS.head(key)
-  if (existing) return { avatarR2Key: key, stored: false }
-
-  const res = await fetch(params.avatarUrl)
-  if (!res.ok || !res.body) return { avatarR2Key: null, stored: false }
-
-  const contentType = res.headers.get('content-type') ?? undefined
-  await env.AVATARS.put(key, res.body, {
-    httpMetadata: contentType ? { contentType } : undefined,
-    customMetadata: { sourceUrl: params.avatarUrl },
-  })
-
-  return { avatarR2Key: key, stored: true }
+async function requireRefreshCredentials(env: CloudflareBindings) {
+  try {
+    return await getWeReadCredentials(env)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes('No WeRead credentials configured')) {
+      throw new Error('No credentials configured')
+    }
+    throw error
+  }
 }
 
 export async function refreshAll(env: CloudflareBindings, options: RefreshAllOptions): Promise<RefreshAllResult> {
@@ -82,27 +70,17 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
 
   const counts = { friendsMeta: 0, profiles: 0, ranking: 0, avatarsStored: 0 }
   const sync = {
-    friendWechat: {
-      synckey: 0,
-      syncver: 0,
-    },
+    friendWechat: { synckey: 0, syncver: 0 },
     friendRanking: { synckey: 0 },
   }
 
   try {
-    const creds = await getWeReadCredentials(env)
+    const creds = await requireRefreshCredentials(env)
+    const state = await getWeReadSyncState(env.DB)
 
-    // Load previous sync state from DB. Missing rows mean "start from zero".
-    const stateRows = await env.DB
-      .prepare('SELECT key, value FROM sync_state WHERE key IN (?1, ?2, ?3)')
-      .bind('friend_wechat_synckey', 'friend_wechat_syncver', 'friend_ranking_synckey')
-      .all<{ key: string; value: string }>()
-
-    const state = new Map<string, string>((stateRows.results ?? []).map((r) => [r.key, r.value]))
-
-    sync.friendWechat.synckey = toIntOrDefault(state.get('friend_wechat_synckey'), sync.friendWechat.synckey)
-    sync.friendWechat.syncver = toIntOrDefault(state.get('friend_wechat_syncver'), sync.friendWechat.syncver)
-    sync.friendRanking.synckey = toIntOrDefault(state.get('friend_ranking_synckey'), sync.friendRanking.synckey)
+    sync.friendWechat.synckey = toIntOrDefault(state.friend_wechat_synckey, sync.friendWechat.synckey)
+    sync.friendWechat.syncver = toIntOrDefault(state.friend_wechat_syncver, sync.friendWechat.syncver)
+    sync.friendRanking.synckey = toIntOrDefault(state.friend_ranking_synckey, sync.friendRanking.synckey)
 
     const capturedAt = Date.now()
 
@@ -118,17 +96,16 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
 
     const usersMeta = wechat.usersMeta ?? []
     counts.friendsMeta = usersMeta.length
-    const uniqueMetaVids = Array.from(new Set(usersMeta.map((m) => m.userVid)))
 
-    for (const userVid of uniqueMetaVids) {
+    for (const userVid of new Set(usersMeta.map((meta) => meta.userVid))) {
       await upsertFriend(env.DB, { userVid })
     }
 
     await insertFriendMetaSnapshots(
       env.DB,
-      usersMeta.map((m) => ({
-        userVid: m.userVid,
-        totalReadingTime: m.totalReadingTime,
+      usersMeta.map((meta) => ({
+        userVid: meta.userVid,
+        totalReadingTime: meta.totalReadingTime,
         capturedAt,
       })),
     )
@@ -139,57 +116,27 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
 
     counts.ranking = ranking.ranking?.length ?? 0
 
-    // Snapshot tables reference friends.user_vid, so seed friend rows before inserts.
-    for (const r of ranking.ranking ?? []) {
+    for (const row of ranking.ranking ?? []) {
       await upsertFriend(env.DB, {
-        userVid: r.user.userVid,
-        name: r.user.name ?? null,
-        gender: r.user.gender ?? null,
-        avatarUrl: r.user.avatar ?? null,
-        isWeChatFriend: r.user.isWeChatFriend ?? null,
-        isHide: r.user.isHide ?? null,
+        userVid: row.user.userVid,
+        name: row.user.name ?? null,
+        gender: row.user.gender ?? null,
+        avatarUrl: row.user.avatar ?? null,
+        isWeChatFriend: row.user.isWeChatFriend ?? null,
+        isHide: row.user.isHide ?? null,
       })
     }
 
     await insertRankingSnapshots(
       env.DB,
-      (ranking.ranking ?? []).map((r) => ({
-        userVid: r.user.userVid,
-        readingTime: r.readingTime,
-        rankWeek: r.rankWeek,
-        orderIndex: r.order,
+      (ranking.ranking ?? []).map((row) => ({
+        userVid: row.user.userVid,
+        readingTime: row.readingTime,
+        rankWeek: row.rankWeek,
+        orderIndex: row.order,
         capturedAt,
       })),
     )
-
-    // Fetch friend profiles (name/avatar/location/...) and optionally store avatars to R2.
-    const uniqueVids = uniqueMetaVids
-    const concurrency = 5
-
-    await mapWithConcurrency(uniqueVids, concurrency, async (userVid) => {
-      const profile = await fetchUser(creds, userVid)
-
-      let avatarR2Key: string | null = null
-      if (profile.avatar) {
-        const avatar = await storeAvatarIfNeeded(env, { userVid, avatarUrl: profile.avatar })
-        avatarR2Key = avatar.avatarR2Key
-        if (avatar.stored) counts.avatarsStored++
-      }
-
-      await upsertFriend(env.DB, {
-        userVid,
-        name: profile.name ?? null,
-        gender: profile.gender ?? null,
-        avatarUrl: profile.avatar ?? null,
-        avatarR2Key,
-        location: profile.location ?? null,
-        isWeChatFriend: profile.isWeChatFriend ?? null,
-        isHide: profile.isHide ?? null,
-        signature: profile.signature ?? null,
-      })
-
-      counts.profiles++
-    })
 
     const myReadBooks = await fetchAllMineReadBooks(creds)
     await replaceMyReadBooksSnapshot(env.DB, {
@@ -235,13 +182,13 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
       counts,
       sync,
     }
-  } catch (err) {
+  } catch (error) {
     const finishedAtMs = Date.now()
     const finishedAt = new Date(finishedAtMs).toISOString()
-    const error = err instanceof Error ? err.message : String(err)
+    const message = error instanceof Error ? error.message : String(error)
 
     if (runId !== null) {
-      await finishRefreshRun(env.DB, { id: runId, finishedAt: finishedAtMs, ok: 0, error })
+      await finishRefreshRun(env.DB, { id: runId, finishedAt: finishedAtMs, ok: 0, error: message })
     }
 
     return {
@@ -251,7 +198,7 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
       finishedAt,
       counts,
       sync,
-      error,
+      error: message,
     }
   }
 }

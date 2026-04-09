@@ -2,8 +2,8 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { admin } from './routes/admin'
 import { api } from './routes/api'
+import { refreshAll } from './services/sync'
 import type { CloudflareBindings } from './types'
-import { refreshAll } from './workflows/refresh'
 
 const app = new Hono<{ Bindings: CloudflareBindings }>()
 
