@@ -224,6 +224,12 @@ curl -X POST "https://<your-worker-domain>/api/admin/weread/credentials" \
   }'
 ```
 
+发布说明：
+
+- 已有部署在升级到这次重构后，必须重新调用 `POST /api/admin/weread/credentials` 上传一份新的完整凭证 JSON
+- 旧的 `weread_session` 数据不会自动迁移到 `weread_credentials`
+- 如果只部署代码但不补传完整凭证，后续刷新会因为缺少当前凭证而失败
+
 ## 凭证更新说明
 
 微信读书凭证可能变化较快，这个项目不依赖长期环境变量来保存它。

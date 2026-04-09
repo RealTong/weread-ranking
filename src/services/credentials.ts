@@ -9,14 +9,6 @@ import type { CloudflareBindings, WeReadCredentials, WeReadCredentialsStatus } f
 
 export class WeReadCredentialsValidationError extends Error {}
 
-const DEFAULT_BASEVER = '10.1.0.80'
-const DEFAULT_APPVER = '8.2.4.101'
-const DEFAULT_CHANNEL_ID = 'AppStore'
-const DEFAULT_USER_AGENT = 'WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)'
-const DEFAULT_OSVER = '16.7.12'
-const DEFAULT_BASEAPI = 303
-const LEGACY_TOKEN_PLACEHOLDER = 'legacy-session'
-
 export type SyncResetReason = 'requested' | 'vid_changed' | null
 export type SaveWeReadCredentialsResult = {
   credentials: StoredWeReadCredentials
@@ -59,35 +51,6 @@ export function normalizeWeReadCredentialsPayload(body: unknown): WeReadCredenti
     userAgent: requireTrimmedString(input.userAgent, 'userAgent'),
     osver: requireTrimmedString(input.osver, 'osver'),
     baseapi: requireInteger(input.baseapi, 'baseapi'),
-  }
-}
-
-function getOptionalTrimmedString(value: unknown, fallback: string): string {
-  if (typeof value !== 'string') return fallback
-  const trimmed = value.trim()
-  return trimmed || fallback
-}
-
-export function normalizeLegacyWeReadSessionPayload(body: unknown): WeReadCredentials {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    throw new WeReadCredentialsValidationError('Invalid credential payload')
-  }
-
-  const input = body as Record<string, unknown>
-  const basever = getOptionalTrimmedString(input.basever, getOptionalTrimmedString(input.v, DEFAULT_BASEVER))
-
-  return {
-    vid: requireTrimmedString(input.vid, 'vid'),
-    skey: requireTrimmedString(input.skey, 'skey'),
-    accessToken: getOptionalTrimmedString(input.accessToken, LEGACY_TOKEN_PLACEHOLDER),
-    refreshToken: getOptionalTrimmedString(input.refreshToken, LEGACY_TOKEN_PLACEHOLDER),
-    basever,
-    appver: getOptionalTrimmedString(input.appver, DEFAULT_APPVER),
-    v: getOptionalTrimmedString(input.v, basever),
-    channelId: getOptionalTrimmedString(input.channelId, DEFAULT_CHANNEL_ID),
-    userAgent: getOptionalTrimmedString(input.userAgent, DEFAULT_USER_AGENT),
-    osver: getOptionalTrimmedString(input.osver, DEFAULT_OSVER),
-    baseapi: typeof input.baseapi === 'number' && Number.isInteger(input.baseapi) ? input.baseapi : DEFAULT_BASEAPI,
   }
 }
 

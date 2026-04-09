@@ -29,20 +29,6 @@ function toUrl(input: string | URL | Request) {
   return new URL(input.toString())
 }
 
-async function updateSession(env: TestEnv, body: Record<string, unknown>) {
-  return await worker.fetch(
-    new Request('http://worker.test/api/admin/weread/session', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': env.API_KEY,
-      },
-      body: JSON.stringify(body),
-    }),
-    env as never,
-  )
-}
-
 async function uploadCredentials(env: TestEnv, body: Record<string, unknown>) {
   return await worker.fetch(
     new Request('http://worker.test/api/admin/weread/credentials', {
@@ -108,42 +94,24 @@ async function readSyncState(db: TestEnv['DB']) {
 
 const originalFetch = globalThis.fetch
 
-describe('WeRead session management', () => {
-  beforeEach(() => {
-    globalThis.fetch = (async (input) => {
-      const url = toUrl(input)
-      if (url.pathname === '/user') {
-        return jsonResponse({
-          userVid: Number(url.searchParams.get('userVid') ?? 0),
-          name: 'self',
-        })
-      }
-      throw new Error(`Unexpected fetch: ${url.toString()}`)
-    }) as typeof fetch
-  })
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch
-  })
-
-  test('stores the active session in D1 and exposes it from the new admin endpoint', async () => {
+describe('WeRead credential management', () => {
+  test('stores uploaded credentials in D1 and exposes them from the canonical admin endpoint', async () => {
     const env = createEnv()
 
-    const updateResponse = await updateSession(env, {
-      vid: '123',
-      skey: 'new-skey',
-    })
+    const updateResponse = await uploadCredentials(env, fullPayload)
 
     expect(updateResponse.status).toBe(200)
     await expect(updateResponse.json()).resolves.toMatchObject({
       ok: true,
-      session: {
+      status: {
+        configured: true,
         vid: '123',
+        source: 'd1',
       },
     })
 
     const statusResponse = await worker.fetch(
-      new Request('http://worker.test/api/admin/weread/session', {
+      new Request('http://worker.test/api/admin/weread/credentials', {
         headers: { 'x-api-key': env.API_KEY },
       }),
       env as never,
@@ -180,8 +148,8 @@ describe('WeRead session management', () => {
       )
       .run()
 
-    expect((await updateSession(env, { vid: '123', skey: 'first-skey' })).status).toBe(200)
-    expect((await updateSession(env, { vid: '456', skey: 'second-skey' })).status).toBe(200)
+    expect((await uploadCredentials(env, fullPayload)).status).toBe(200)
+    expect((await uploadCredentials(env, { ...fullPayload, vid: '456' })).status).toBe(200)
 
     const syncRows = await env.DB.prepare(
       `SELECT key, value
@@ -878,6 +846,39 @@ describe('Route split compatibility', () => {
 
     expect(adminResponse.status).toBe(200)
     expect(legacyResponse.status).toBe(200)
+  })
+
+  test('does not expose removed legacy credential compatibility endpoints', async () => {
+    const env = createEnv()
+
+    const requests = [
+      new Request('http://worker.test/api/admin/weread/session', {
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      new Request('http://worker.test/api/admin/weread/session', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': env.API_KEY,
+        },
+        body: JSON.stringify(fullPayload),
+      }),
+      new Request('http://worker.test/api/admin/credentials', {
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      new Request('http://worker.test/api/admin/credentials', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': env.API_KEY,
+        },
+        body: JSON.stringify(fullPayload),
+      }),
+    ]
+
+    const responses = await Promise.all(requests.map((request) => worker.fetch(request, env as never)))
+
+    expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 404])
   })
 
   test('rejects unauthorized admin and query requests after the route split', async () => {
