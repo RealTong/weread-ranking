@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { admin } from './routes/admin'
-import { api } from './routes/api'
+import { admin, refreshHandler } from './routes/admin'
+import { apiKeyAuth } from './routes/middleware'
+import { query } from './routes/query'
 import { refreshAll } from './services/sync'
 import type { CloudflareBindings } from './types'
 
@@ -31,8 +32,11 @@ app.use('/api/*', async (c, next) => {
   })(c, next)
 })
 
-app.route('/api', admin)
-app.route('/api', api)
+app.use('/api/*', apiKeyAuth)
+
+app.route('/api/admin', admin)
+app.post('/api/refresh', refreshHandler)
+app.route('/api', query)
 
 export default {
   fetch: app.fetch,

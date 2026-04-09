@@ -790,3 +790,233 @@ describe('My read books sync', () => {
     })
   })
 })
+
+describe('Route split compatibility', () => {
+  beforeEach(() => {
+    globalThis.fetch = (async (input) => {
+      const url = toUrl(input)
+
+      if (url.pathname === '/user') {
+        return jsonResponse({
+          userVid: Number(url.searchParams.get('userVid') ?? 0),
+          name: 'friend',
+          avatar: null,
+        })
+      }
+
+      if (url.pathname === '/friend/wechat') {
+        return jsonResponse({
+          synckey: 11,
+          syncver: 22,
+          usersMeta: [{ userVid: 888, totalReadingTime: 100 }],
+        })
+      }
+
+      if (url.pathname === '/friend/ranking') {
+        return jsonResponse({
+          synckey: 55,
+          ranking: [
+            {
+              user: {
+                userVid: 888,
+                name: 'friend',
+                avatar: null,
+              },
+              readingTime: 10,
+              rankWeek: 1,
+              order: 1,
+            },
+          ],
+        })
+      }
+
+      if (url.pathname === '/mine/readbook') {
+        return jsonResponse({
+          stars: [],
+          years: [],
+          ratings: [],
+          yearPreference: [],
+          readBooks: [],
+          hasMore: 0,
+          totalCount: 0,
+          synckey: 77,
+        })
+      }
+
+      throw new Error(`Unexpected fetch: ${url.toString()}`)
+    }) as typeof fetch
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  test('supports both /api/admin/refresh and legacy /api/refresh', async () => {
+    const env = createEnv()
+
+    expect((await uploadCredentials(env, fullPayload)).status).toBe(200)
+
+    const adminResponse = await worker.fetch(
+      new Request('http://worker.test/api/admin/refresh', {
+        method: 'POST',
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
+    const legacyResponse = await worker.fetch(
+      new Request('http://worker.test/api/refresh', {
+        method: 'POST',
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
+
+    expect(adminResponse.status).toBe(200)
+    expect(legacyResponse.status).toBe(200)
+  })
+
+  test('rejects unauthorized admin and query requests after the route split', async () => {
+    const env = createEnv()
+
+    const adminResponse = await worker.fetch(
+      new Request('http://worker.test/api/admin/weread/credentials'),
+      env as never,
+    )
+    const queryResponse = await worker.fetch(
+      new Request('http://worker.test/api/friends'),
+      env as never,
+    )
+
+    expect(adminResponse.status).toBe(401)
+    expect(queryResponse.status).toBe(401)
+  })
+
+  test('fails closed when API_KEY is not configured', async () => {
+    const envWithoutKey = { DB: createTestD1Database() }
+
+    const response = await worker.fetch(
+      new Request('http://worker.test/api/friends'),
+      envWithoutKey as never,
+    )
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: 'API_KEY not configured',
+    })
+  })
+
+  test('preserves query response envelopes after the route split', async () => {
+    const env = createEnv()
+
+    expect((await uploadCredentials(env, fullPayload)).status).toBe(200)
+    expect(
+      (
+        await worker.fetch(
+          new Request('http://worker.test/api/admin/refresh', {
+            method: 'POST',
+            headers: { 'x-api-key': env.API_KEY },
+          }),
+          env as never,
+        )
+      ).status,
+    ).toBe(200)
+
+    const aioResponse = await worker.fetch(
+      new Request('http://worker.test/api/aio?limit=10&offset=0', {
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
+    const friendsResponse = await worker.fetch(
+      new Request('http://worker.test/api/friends?limit=10&offset=0', {
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
+    const historyResponse = await worker.fetch(
+      new Request('http://worker.test/api/friends/888/history?limit=10', {
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
+    const readBooksResponse = await worker.fetch(
+      new Request('http://worker.test/api/readbooks?limit=10&offset=0', {
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
+
+    expect(aioResponse.status).toBe(200)
+    await expect(aioResponse.json()).resolves.toMatchObject({
+      ok: true,
+      latest: {
+        metaCapturedAt: expect.any(Number),
+        rankingCapturedAt: expect.any(Number),
+      },
+      friends: expect.any(Array),
+      ranking: {
+        rows: expect.any(Array),
+      },
+    })
+
+    expect(friendsResponse.status).toBe(200)
+    await expect(friendsResponse.json()).resolves.toMatchObject({
+      ok: true,
+      friends: expect.any(Array),
+    })
+
+    expect(historyResponse.status).toBe(200)
+    await expect(historyResponse.json()).resolves.toMatchObject({
+      ok: true,
+      history: {
+        userVid: 888,
+        meta: expect.any(Array),
+        ranking: expect.any(Array),
+      },
+    })
+
+    expect(readBooksResponse.status).toBe(200)
+    await expect(readBooksResponse.json()).resolves.toMatchObject({
+      ok: true,
+      latest: {
+        sourceSynckey: 77,
+      },
+      readBooks: expect.any(Array),
+    })
+  })
+
+  test('reads refreshed data back from D1 through the query API', async () => {
+    const env = createEnv()
+
+    expect((await uploadCredentials(env, fullPayload)).status).toBe(200)
+
+    const refreshResponse = await worker.fetch(
+      new Request('http://worker.test/api/admin/refresh', {
+        method: 'POST',
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
+    const rankingResponse = await worker.fetch(
+      new Request('http://worker.test/api/ranking', {
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
+
+    expect(refreshResponse.status).toBe(200)
+    expect(rankingResponse.status).toBe(200)
+    await expect(rankingResponse.json()).resolves.toMatchObject({
+      ok: true,
+      ranking: {
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            userVid: 888,
+            readingTime: 10,
+          }),
+        ]),
+      },
+    })
+  })
+})
