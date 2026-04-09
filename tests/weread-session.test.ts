@@ -228,6 +228,48 @@ describe('WeRead credential contract', () => {
       error: expect.stringContaining('baseapi'),
     })
   })
+
+  test('rejects weread credential rows whose id is not current', async () => {
+    const env = createEnv()
+
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO weread_credentials (
+          id,
+          vid,
+          skey,
+          access_token,
+          refresh_token,
+          basever,
+          appver,
+          v,
+          channel_id,
+          user_agent,
+          osver,
+          baseapi,
+          updated_at
+        ) VALUES (
+          ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13
+        )`,
+      )
+        .bind(
+          'not-current',
+          '123',
+          'test-skey',
+          'access-token',
+          'refresh-token',
+          '10.1.0.80',
+          '8.2.4.101',
+          '10.1.0.80',
+          'AppStore',
+          'WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)',
+          '16.7.12',
+          303,
+          Date.now(),
+        )
+        .run(),
+    ).rejects.toThrow(/constraint/i)
+  })
 })
 
 describe('Incremental refresh cursors', () => {

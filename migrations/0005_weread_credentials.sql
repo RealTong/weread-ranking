@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS weread_credentials (
-  id TEXT PRIMARY KEY NOT NULL,
+  id TEXT PRIMARY KEY NOT NULL CHECK (id = 'current'),
   vid TEXT NOT NULL,
   skey TEXT NOT NULL,
   access_token TEXT NOT NULL,
