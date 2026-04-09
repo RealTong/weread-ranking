@@ -171,7 +171,6 @@ export async function finishRefreshRun(
     friendsMetaCount?: number
     profilesCount?: number
     rankingCount?: number
-    avatarsStoredCount?: number
   },
 ): Promise<void> {
   await db
@@ -182,8 +181,7 @@ export async function finishRefreshRun(
            error = ?4,
            friends_meta_count = ?5,
            profiles_count = ?6,
-           ranking_count = ?7,
-           avatars_stored_count = ?8
+           ranking_count = ?7
        WHERE id = ?1`,
     )
     .bind(
@@ -194,7 +192,6 @@ export async function finishRefreshRun(
       params.friendsMetaCount ?? null,
       params.profilesCount ?? null,
       params.rankingCount ?? null,
-      params.avatarsStoredCount ?? null,
     )
     .run()
 }

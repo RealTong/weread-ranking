@@ -26,7 +26,6 @@ export type RefreshAllResult = {
     friendsMeta: number
     profiles: number
     ranking: number
-    avatarsStored: number
   }
   sync: {
     friendWechat: { synckey: number; syncver: number }
@@ -68,7 +67,7 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
     // best-effort only (e.g. DB not migrated yet)
   }
 
-  const counts = { friendsMeta: 0, profiles: 0, ranking: 0, avatarsStored: 0 }
+  const counts = { friendsMeta: 0, profiles: 0, ranking: 0 }
   const sync = {
     friendWechat: { synckey: 0, syncver: 0 },
     friendRanking: { synckey: 0 },
@@ -170,7 +169,6 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
         friendsMetaCount: counts.friendsMeta,
         profilesCount: counts.profiles,
         rankingCount: counts.ranking,
-        avatarsStoredCount: counts.avatarsStored,
       })
     }
 

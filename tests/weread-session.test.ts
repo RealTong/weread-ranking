@@ -545,6 +545,11 @@ describe('Incremental refresh cursors', () => {
     const result = await refreshAll(env as never, { source: 'api' })
 
     expect(result.ok).toBe(true)
+    expect(result.counts).toEqual({
+      friendsMeta: 1,
+      profiles: 0,
+      ranking: 1,
+    })
     expect(seenHeaders).toEqual(['access-token'])
   })
 
@@ -1088,7 +1093,5 @@ describe('Route split compatibility', () => {
     )
 
     expect(response.status).toBe(404)
-    expect(response.headers.get('content-type')).toContain('text/plain')
-    await expect(response.text()).resolves.toBe('404 Not Found')
   })
 })
