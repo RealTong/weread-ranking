@@ -1,6 +1,7 @@
 private/
 .dev.vars
 .wrangler/
+.worktrees/
 dist/
 node_modules/
 .DS_Store
