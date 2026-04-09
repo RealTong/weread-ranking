@@ -556,6 +556,88 @@ describe('Incremental refresh cursors', () => {
     expect(result.ok).toBe(false)
     expect(result.error).toContain('No credentials configured')
   })
+
+  test('keeps wechat-only friends in the API response with reading-time metadata and sparse profile fields', async () => {
+    const env = createEnv()
+
+    globalThis.fetch = (async (input) => {
+      const url = toUrl(input)
+
+      if (url.pathname === '/user') {
+        throw new Error('Unexpected fetch: /user')
+      }
+
+      if (url.pathname === '/friend/wechat') {
+        return jsonResponse({
+          synckey: 11,
+          syncver: 22,
+          usersMeta: [
+            { userVid: 888, totalReadingTime: 100 },
+            { userVid: 999, totalReadingTime: 42 },
+          ],
+        })
+      }
+
+      if (url.pathname === '/friend/ranking') {
+        return jsonResponse({
+          synckey: 55,
+          ranking: [
+            {
+              user: {
+                userVid: 888,
+                name: 'ranked-friend',
+                avatar: null,
+              },
+              readingTime: 10,
+              rankWeek: 1,
+              order: 1,
+            },
+          ],
+        })
+      }
+
+      if (url.pathname === '/mine/readbook') {
+        return jsonResponse({
+          stars: [],
+          years: [],
+          ratings: [],
+          yearPreference: [],
+          readBooks: [],
+          hasMore: 0,
+          totalCount: 0,
+          synckey: 77,
+        })
+      }
+
+      throw new Error(`Unexpected fetch: ${url.toString()}`)
+    }) as typeof fetch
+
+    expect((await uploadCredentials(env, fullPayload)).status).toBe(200)
+    expect((await refreshAll(env as never, { source: 'api' })).ok).toBe(true)
+
+    const response = await worker.fetch(
+      new Request('http://worker.test/api/friends', {
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
+
+    expect(response.status).toBe(200)
+    const json = await response.json()
+    expect(json).toMatchObject({ ok: true })
+    expect(json.friends).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          userVid: 999,
+          latestTotalReadingTime: 42,
+          name: null,
+          avatarUrl: null,
+          location: null,
+          signature: null,
+        }),
+      ]),
+    )
+  })
 })
 
 describe('My read books sync', () => {
