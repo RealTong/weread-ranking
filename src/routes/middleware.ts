@@ -2,12 +2,12 @@ import type { MiddlewareHandler } from 'hono'
 import type { CloudflareBindings } from '../types'
 
 export const apiKeyAuth: MiddlewareHandler<{ Bindings: CloudflareBindings }> = async (c, next) => {
-  if (c.req.method === 'OPTIONS') return next()
-
   const expected = c.env.API_KEY?.trim()
   if (!expected) {
     return c.json({ ok: false, error: 'API_KEY not configured' }, 500)
   }
+
+  if (c.req.method === 'OPTIONS') return next()
 
   const headerKey = c.req.header('x-api-key')?.trim()
   const auth = c.req.header('authorization')?.trim()

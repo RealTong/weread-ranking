@@ -11,6 +11,8 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
 app.get('/', (c) => c.text('weread-ranking worker'))
 app.get('/health', (c) => c.json({ ok: true }))
 
+app.use('/api/*', apiKeyAuth)
+
 app.use('/api/*', async (c, next) => {
   const raw = c.env.CORS_ORIGIN?.trim()
   if (!raw) return next()
@@ -31,8 +33,6 @@ app.use('/api/*', async (c, next) => {
     maxAge: 60 * 60 * 24,
   })(c, next)
 })
-
-app.use('/api/*', apiKeyAuth)
 
 app.route('/api/admin', admin)
 app.post('/api/refresh', refreshHandler)

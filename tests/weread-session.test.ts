@@ -906,6 +906,23 @@ describe('Route split compatibility', () => {
     })
   })
 
+  test('fails closed for OPTIONS requests when API_KEY is not configured', async () => {
+    const envWithoutKey = { DB: createTestD1Database() }
+
+    const response = await worker.fetch(
+      new Request('http://worker.test/api/friends', {
+        method: 'OPTIONS',
+      }),
+      envWithoutKey as never,
+    )
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: 'API_KEY not configured',
+    })
+  })
+
   test('preserves query response envelopes after the route split', async () => {
     const env = createEnv()
 
