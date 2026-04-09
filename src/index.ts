@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { admin } from './routes/admin'
 import { api } from './routes/api'
 import type { CloudflareBindings } from './types'
 import { refreshAll } from './workflows/refresh'
@@ -30,6 +31,7 @@ app.use('/api/*', async (c, next) => {
   })(c, next)
 })
 
+app.route('/api', admin)
 app.route('/api', api)
 
 export default {

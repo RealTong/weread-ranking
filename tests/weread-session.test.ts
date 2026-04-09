@@ -43,6 +43,20 @@ async function updateSession(env: TestEnv, body: Record<string, unknown>) {
   )
 }
 
+async function uploadCredentials(env: TestEnv, body: Record<string, unknown>) {
+  return await worker.fetch(
+    new Request('http://worker.test/api/admin/weread/credentials', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': env.API_KEY,
+      },
+      body: JSON.stringify(body),
+    }),
+    env as never,
+  )
+}
+
 const originalFetch = globalThis.fetch
 
 describe('WeRead session management', () => {
@@ -134,6 +148,85 @@ describe('WeRead session management', () => {
       { key: 'friend_wechat_synckey', value: '0' },
       { key: 'friend_wechat_syncver', value: '0' },
     ])
+  })
+})
+
+describe('WeRead credential contract', () => {
+  test('stores uploaded credentials and exposes only safe status metadata', async () => {
+    const env = createEnv()
+
+    const uploadResponse = await uploadCredentials(env, {
+      vid: '123',
+      skey: 'test-skey',
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      basever: '10.1.0.80',
+      appver: '8.2.4.101',
+      v: '10.1.0.80',
+      channelId: 'AppStore',
+      userAgent: 'WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)',
+      osver: '16.7.12',
+      baseapi: 303,
+    })
+
+    expect(uploadResponse.status).toBe(200)
+    const uploadJson = await uploadResponse.json()
+    expect(uploadJson).toMatchObject({
+      ok: true,
+      status: {
+        configured: true,
+        source: 'd1',
+        vid: '123',
+      },
+    })
+    expect(JSON.stringify(uploadJson)).not.toContain('access-token')
+    expect(JSON.stringify(uploadJson)).not.toContain('refresh-token')
+
+    const statusResponse = await worker.fetch(
+      new Request('http://worker.test/api/admin/weread/credentials', {
+        headers: { 'x-api-key': env.API_KEY },
+      }),
+      env as never,
+    )
+
+    expect(statusResponse.status).toBe(200)
+    const statusJson = await statusResponse.json()
+    expect(statusJson).toMatchObject({
+      ok: true,
+      status: {
+        configured: true,
+        source: 'd1',
+        vid: '123',
+      },
+    })
+    expect(statusJson.status.updatedAt).toEqual(expect.any(Number))
+    expect(statusJson.status.updatedAtIso).toEqual(expect.any(String))
+    expect(JSON.stringify(statusJson)).not.toContain('access-token')
+    expect(JSON.stringify(statusJson)).not.toContain('refresh-token')
+  })
+
+  test('rejects invalid credential payloads with HTTP 400', async () => {
+    const env = createEnv()
+
+    const response = await uploadCredentials(env, {
+      vid: '123',
+      skey: 'test-skey',
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      basever: '10.1.0.80',
+      appver: '8.2.4.101',
+      v: '10.1.0.80',
+      channelId: 'AppStore',
+      userAgent: 'WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)',
+      osver: '16.7.12',
+      baseapi: '303',
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('baseapi'),
+    })
   })
 })
 
