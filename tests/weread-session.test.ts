@@ -57,6 +57,20 @@ const fullPayload = {
   baseapi: 303,
 }
 
+const capturedAndroidPayload = {
+  vid: '449518091',
+  skey: '',
+  accessToken: '6aq6u4hw',
+  refreshToken: '',
+  basever: '7.5.2.10162694',
+  appver: '7.5.2.10162694',
+  v: '',
+  channelId: '1',
+  userAgent: 'WeRead/7.5.2 WRBrand/other Dalvik/2.1.0 (Linux; U; Android 13; Pixel 4 XL Build/TP1A.221005.002.B2)',
+  osver: '13',
+  baseapi: '33',
+}
+
 async function seedSyncState(db: TestEnv['DB']) {
   const now = Date.now()
   await db
@@ -210,18 +224,64 @@ describe('WeRead credential contract', () => {
     expect(JSON.stringify(statusJson)).not.toContain('refresh-token')
   })
 
-  test('rejects invalid credential payloads with HTTP 400', async () => {
+  test('accepts captured weread payloads with empty string fields and string baseapi', async () => {
     const env = createEnv()
 
-    const response = await uploadCredentials(env, {
-      ...fullPayload,
-      baseapi: '303',
+    const response = await uploadCredentials(env, capturedAndroidPayload)
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      status: {
+        configured: true,
+        source: 'd1',
+        vid: '449518091',
+      },
     })
 
-    expect(response.status).toBe(400)
-    await expect(response.json()).resolves.toMatchObject({
-      ok: false,
-      error: expect.stringContaining('baseapi'),
+    const stored = await env.DB
+      .prepare(
+        `SELECT
+          vid,
+          skey,
+          access_token as accessToken,
+          refresh_token as refreshToken,
+          basever,
+          appver,
+          v,
+          channel_id as channelId,
+          user_agent as userAgent,
+          osver,
+          baseapi
+         FROM weread_credentials
+         WHERE id = 'current'`,
+      )
+      .first<{
+        vid: string
+        skey: string
+        accessToken: string
+        refreshToken: string
+        basever: string
+        appver: string
+        v: string
+        channelId: string
+        userAgent: string
+        osver: string
+        baseapi: string
+      }>()
+
+    expect(stored).toEqual({
+      vid: '449518091',
+      skey: '',
+      accessToken: '6aq6u4hw',
+      refreshToken: '',
+      basever: '7.5.2.10162694',
+      appver: '7.5.2.10162694',
+      v: '',
+      channelId: '1',
+      userAgent: 'WeRead/7.5.2 WRBrand/other Dalvik/2.1.0 (Linux; U; Android 13; Pixel 4 XL Build/TP1A.221005.002.B2)',
+      osver: '13',
+      baseapi: '33',
     })
   })
 

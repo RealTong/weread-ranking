@@ -2,7 +2,7 @@
   "name": "weread-ranking-worker",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --ip 0.0.0.0",
     "deploy": "wrangler deploy --minify",
     "test": "bun test",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",

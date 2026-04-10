@@ -18,7 +18,7 @@ export type WeReadCredentials = {
   channelId: string
   userAgent: string
   osver: string
-  baseapi: number
+  baseapi: string
 }
 
 export type WeReadCredentialsStatus =

@@ -17,7 +17,7 @@ type WeReadCredentialRow = {
   channelId: string
   userAgent: string
   osver: string
-  baseapi: number
+  baseapi: string | number | null
   updatedAt: number
 }
 
@@ -56,7 +56,7 @@ export async function getCurrentWeReadCredentials(db: D1Database): Promise<Store
     channelId: row.channelId,
     userAgent: row.userAgent,
     osver: row.osver,
-    baseapi: Number(row.baseapi),
+    baseapi: String(row.baseapi ?? ''),
     updatedAt: Number(row.updatedAt),
   }
 }

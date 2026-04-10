@@ -136,16 +136,16 @@ curl -X POST "http://localhost:8787/api/admin/weread/credentials" \
   -H "content-type: application/json" \
   -d '{
     "vid": "449518091",
-    "skey": "your-latest-skey",
-    "accessToken": "your-access-token",
-    "refreshToken": "your-refresh-token",
-    "basever": "10.1.0.80",
-    "appver": "8.2.4.101",
-    "v": "10.1.0.80",
-    "channelId": "AppStore",
-    "userAgent": "WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)",
-    "osver": "16.7.12",
-    "baseapi": 303
+    "skey": "",
+    "accessToken": "6aq6u4hw",
+    "refreshToken": "",
+    "basever": "7.5.2.10162694",
+    "appver": "7.5.2.10162694",
+    "v": "",
+    "channelId": "1",
+    "userAgent": "WeRead/7.5.2 WRBrand/other Dalvik/2.1.0 (Linux; U; Android 13; Pixel 4 XL Build/TP1A.221005.002.B2)",
+    "osver": "13",
+    "baseapi": "33"
   }'
 ```
 
@@ -154,16 +154,16 @@ curl -X POST "http://localhost:8787/api/admin/weread/credentials" \
 ```json
 {
   "vid": "449518091",
-  "skey": "your-latest-skey",
-  "accessToken": "your-access-token",
-  "refreshToken": "your-refresh-token",
-  "basever": "10.1.0.80",
-  "appver": "8.2.4.101",
-  "v": "10.1.0.80",
-  "channelId": "AppStore",
-  "userAgent": "WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)",
-  "osver": "16.7.12",
-  "baseapi": 303,
+  "skey": "",
+  "accessToken": "6aq6u4hw",
+  "refreshToken": "",
+  "basever": "7.5.2.10162694",
+  "appver": "7.5.2.10162694",
+  "v": "",
+  "channelId": "1",
+  "userAgent": "WeRead/7.5.2 WRBrand/other Dalvik/2.1.0 (Linux; U; Android 13; Pixel 4 XL Build/TP1A.221005.002.B2)",
+  "osver": "13",
+  "baseapi": "33",
   "resetSync": true
 }
 ```
@@ -211,16 +211,16 @@ curl -X POST "https://<your-worker-domain>/api/admin/weread/credentials" \
   -H "content-type: application/json" \
   -d '{
     "vid": "449518091",
-    "skey": "your-latest-skey",
-    "accessToken": "your-access-token",
-    "refreshToken": "your-refresh-token",
-    "basever": "10.1.0.80",
-    "appver": "8.2.4.101",
-    "v": "10.1.0.80",
-    "channelId": "AppStore",
-    "userAgent": "WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)",
-    "osver": "16.7.12",
-    "baseapi": 303
+    "skey": "",
+    "accessToken": "6aq6u4hw",
+    "refreshToken": "",
+    "basever": "7.5.2.10162694",
+    "appver": "7.5.2.10162694",
+    "v": "",
+    "channelId": "1",
+    "userAgent": "WeRead/7.5.2 WRBrand/other Dalvik/2.1.0 (Linux; U; Android 13; Pixel 4 XL Build/TP1A.221005.002.B2)",
+    "osver": "13",
+    "baseapi": "33"
   }'
 ```
 
@@ -265,22 +265,24 @@ x-api-key: <API_KEY>
 ```json
 {
   "vid": "449518091",
-  "skey": "your-latest-skey",
-  "accessToken": "your-access-token",
-  "refreshToken": "your-refresh-token",
-  "basever": "10.1.0.80",
-  "appver": "8.2.4.101",
-  "v": "10.1.0.80",
-  "channelId": "AppStore",
-  "userAgent": "WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)",
-  "osver": "16.7.12",
-  "baseapi": 303
+  "skey": "",
+  "accessToken": "6aq6u4hw",
+  "refreshToken": "",
+  "basever": "7.5.2.10162694",
+  "appver": "7.5.2.10162694",
+  "v": "",
+  "channelId": "1",
+  "userAgent": "WeRead/7.5.2 WRBrand/other Dalvik/2.1.0 (Linux; U; Android 13; Pixel 4 XL Build/TP1A.221005.002.B2)",
+  "osver": "13",
+  "baseapi": "33"
 }
 ```
 
 可选字段：
 
 - `resetSync: true` 会重置增量同步游标
+- 凭证字段会按字符串保存；缺失字段会落成空字符串
+- `baseapi` 可以传 `"33"` 这样的字符串，也可以传数字，最终都会按字符串透传给 WeRead
 
 ### `GET /api/admin/weread/credentials`
 

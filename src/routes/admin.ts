@@ -28,6 +28,7 @@ admin.post('/weread/credentials', async (c) => {
   } catch {
     return c.json({ ok: false, error: 'Invalid JSON body' }, 400)
   }
+  console.log('Received credentials update request:', JSON.stringify(body))
 
   try {
     const credentials = normalizeWeReadCredentialsPayload(body)

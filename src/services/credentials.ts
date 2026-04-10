@@ -18,18 +18,14 @@ export type SaveWeReadCredentialsResult = {
   }
 }
 
-function requireTrimmedString(value: unknown, field: keyof WeReadCredentials): string {
-  if (typeof value !== 'string') throw new WeReadCredentialsValidationError(`Missing ${field}`)
-  const trimmed = value.trim()
-  if (!trimmed) throw new WeReadCredentialsValidationError(`Missing ${field}`)
-  return trimmed
-}
-
-function requireInteger(value: unknown, field: keyof WeReadCredentials): number {
-  if (typeof value !== 'number' || !Number.isInteger(value)) {
+function normalizeCredentialString(value: unknown, field: keyof WeReadCredentials): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (typeof value === 'object') {
     throw new WeReadCredentialsValidationError(`Invalid ${field}`)
   }
-  return value
+  return String(value).trim()
 }
 
 export function normalizeWeReadCredentialsPayload(body: unknown): WeReadCredentials {
@@ -40,17 +36,17 @@ export function normalizeWeReadCredentialsPayload(body: unknown): WeReadCredenti
   const input = body as Record<string, unknown>
 
   return {
-    vid: requireTrimmedString(input.vid, 'vid'),
-    skey: requireTrimmedString(input.skey, 'skey'),
-    accessToken: requireTrimmedString(input.accessToken, 'accessToken'),
-    refreshToken: requireTrimmedString(input.refreshToken, 'refreshToken'),
-    basever: requireTrimmedString(input.basever, 'basever'),
-    appver: requireTrimmedString(input.appver, 'appver'),
-    v: requireTrimmedString(input.v, 'v'),
-    channelId: requireTrimmedString(input.channelId, 'channelId'),
-    userAgent: requireTrimmedString(input.userAgent, 'userAgent'),
-    osver: requireTrimmedString(input.osver, 'osver'),
-    baseapi: requireInteger(input.baseapi, 'baseapi'),
+    vid: normalizeCredentialString(input.vid, 'vid'),
+    skey: normalizeCredentialString(input.skey, 'skey'),
+    accessToken: normalizeCredentialString(input.accessToken, 'accessToken'),
+    refreshToken: normalizeCredentialString(input.refreshToken, 'refreshToken'),
+    basever: normalizeCredentialString(input.basever, 'basever'),
+    appver: normalizeCredentialString(input.appver, 'appver'),
+    v: normalizeCredentialString(input.v, 'v'),
+    channelId: normalizeCredentialString(input.channelId, 'channelId'),
+    userAgent: normalizeCredentialString(input.userAgent, 'userAgent'),
+    osver: normalizeCredentialString(input.osver, 'osver'),
+    baseapi: normalizeCredentialString(input.baseapi, 'baseapi'),
   }
 }
 

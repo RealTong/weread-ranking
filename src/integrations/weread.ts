@@ -21,7 +21,7 @@ function buildHeaders(creds: WeReadCredentials): HeadersInit {
     channelId: creds.channelId,
     'user-agent': creds.userAgent,
     osver: creds.osver,
-    baseapi: String(creds.baseapi),
+    baseapi: creds.baseapi,
   }
 }
 
