@@ -1,74 +1,73 @@
 # weread-ranking
 
-一个部署在 Cloudflare Workers 上的微信读书数据同步服务。
+[中文说明](./README_ZH.md)
 
-它解决两个实际问题：
+`weread-ranking` is a Cloudflare Workers service for syncing WeRead data into D1 and serving stable cached APIs.
 
-- 微信读书 `skey` 有效期短，不适合直接写死在环境变量里
-- 好友榜、阅读历史、个人书单这些数据更适合定时同步到本地数据库，再通过稳定 API 对外提供
+It is designed around a practical workflow:
 
-这个项目的设计是：
+- WeRead credentials expire quickly and should not be hard-coded as long-lived environment variables.
+- An Android device can periodically refresh those credentials by opening a proxy app and WeRead.
+- The Worker stores the latest credential payload in D1, reuses it for sync jobs, and serves only local cached data to consumers.
 
-- 外部脚本或手动操作负责获取最新微信读书完整凭证
-- Worker 提供一个凭证写入 API，把最新凭证写入 D1
-- Worker 定时同步微信读书数据到 D1
-- Web、脚本、自动化任务都只读本项目自己的 API
+## Features
 
-## 功能
+- Store exactly one current WeRead credential set in D1
+- Sync friend reading time snapshots
+- Sync friend ranking snapshots
+- Sync your `/mine/readbook` history into D1
+- Expose cached HTTP APIs for friends, ranking, and read books
+- Support both manual credential upload and Android-based automatic credential capture
 
-- 同步微信读书好友阅读总时长
-- 同步好友周榜数据
-- 同步你的个人历史书单 `/mine/readbook`
-- 通过 D1 持久化微信读书凭证、同步游标和快照数据
-- 提供可直接消费的 HTTP API
+## End-to-End Flow
 
-## 技术栈
+1. An Android automation launches the proxy app and then launches WeRead.
+2. The bundled rewrite script captures the WeRead `/login` response and selected request headers.
+3. The script forwards that payload to `POST /api/admin/weread/credentials`.
+4. The Worker stores the latest credential set in D1.
+5. Scheduled cron runs or `POST /api/admin/refresh` reuse the stored credentials to sync WeRead data into D1.
+6. Your frontend or scripts read only from this project's cached APIs such as `/api/aio` and `/api/readbooks`.
 
-- Cloudflare Workers
-- Hono
-- Cloudflare D1
-- Bun
+## Repository Files
 
-## 数据流
+- [`src/`](./src): Worker routes, services, D1 access, and WeRead integration code
+- [`migrations/`](./migrations): D1 schema migrations
+- [`weread-rewrite.js`](./weread-rewrite.js): rewrite script that forwards WeRead credentials to the Worker
+- [`weread-rewrite.macro`](./weread-rewrite.macro): Android automation macro export that opens the proxy app and WeRead on an interval
+- [`request.http`](./request.http) and [`test.http`](./test.http): handy local request examples
 
-1. 通过 `POST /api/admin/weread/credentials` 更新当前可用的微信读书完整凭证
-2. `POST /api/admin/refresh` 或兼容别名 `POST /api/refresh` 触发同步
-3. Worker 从 D1 读取当前凭证
-4. Worker 拉取微信读书数据并写入 D1
-5. 业务侧通过 `/api/aio`、`/api/friends`、`/api/ranking`、`/api/readbooks` 读取 D1 本地缓存数据
+## Prerequisites
 
-## 前置要求
+- A Cloudflare account
+- [Bun](https://bun.sh/)
+- [Wrangler](https://developers.cloudflare.com/workers/wrangler/)
+- An Android device if you want automatic credential capture
+- A proxy app compatible with the bundled rewrite script
 
-- 一个 Cloudflare 账号
-- 已安装 [Bun](https://bun.sh/)
-- 已安装并登录 [Wrangler](https://developers.cloudflare.com/workers/wrangler/)
+## Worker Setup
 
-## 快速开始
-
-### 1. 安装依赖
+### 1. Install dependencies
 
 ```bash
 bun install
 ```
 
-### 2. 创建 D1
-
-先创建 D1 数据库：
+### 2. Create the D1 database
 
 ```bash
 bunx wrangler d1 create weread-ranking
 ```
 
-### 3. 更新 `wrangler.jsonc`
+### 3. Update `wrangler.jsonc`
 
-把你自己的 D1 `database_id` 填进去。
+Fill in your own D1 `database_id` and review the cron schedule.
 
-默认需要确认这些字段：
+Relevant fields:
 
 - `d1_databases[0].database_id`
 - `triggers.crons`
 
-默认 cron 是每小时执行一次：
+The current Worker cron is hourly:
 
 ```jsonc
 "triggers": {
@@ -76,59 +75,166 @@ bunx wrangler d1 create weread-ranking
 }
 ```
 
-### 4. 配置本地环境变量
-
-复制示例文件：
+### 4. Configure local secrets
 
 ```bash
 cp .dev.vars.example .dev.vars
 ```
 
-填入：
+Fill in:
 
 ```bash
 API_KEY="replace-with-a-long-random-string"
 CORS_ORIGIN="http://localhost:3000"
 ```
 
-说明：
+Notes:
 
-- `API_KEY` 用于保护所有管理和查询接口
-- `CORS_ORIGIN` 可选；如果前端和 Worker 不同源，可以配置允许访问的域名，多个域名用逗号分隔
+- `API_KEY` protects all admin and query APIs.
+- `CORS_ORIGIN` is optional.
+- Multiple allowed origins can be provided as a comma-separated list.
 
-### 5. 执行数据库迁移
+### 5. Apply migrations
 
-本地开发：
+For local development:
 
 ```bash
 bun run migrate:local
 ```
 
-部署到 Cloudflare 后执行远程迁移：
+For the deployed Cloudflare D1 database:
 
 ```bash
 bun run migrate:remote
 ```
 
-### 6. 启动本地开发服务
+### 6. Start local development
 
 ```bash
 bun run dev
 ```
 
-默认地址：
+Default local URL:
 
 ```text
 http://localhost:8787
 ```
 
-## 首次使用流程
+## Android Automation for Credential Capture
 
-本项目第一次启动后，建议按下面顺序执行。
+This repository now includes two Android-side assets:
 
-### 1. 上传微信读书完整凭证
+- [`weread-rewrite.js`](./weread-rewrite.js)
+- [`weread-rewrite.macro`](./weread-rewrite.macro)
 
-拿到最新的完整凭证 JSON 后，调用：
+Important naming note:
+
+- The user-facing workflow may refer to "Proxybin", but the bundled assets in this repository target `ProxyPin`.
+- The macro launches package `com.network.proxy`, and the script comments also reference ProxyPin.
+
+### What `weread-rewrite.js` does
+
+The rewrite script:
+
+- watches requests to `weread.qq.com`
+- filters for the `/login` flow
+- parses the WeRead login response JSON
+- reads these request headers when available:
+  - `v`
+  - `basever`
+  - `baseapi`
+  - `channelId`
+  - `appver`
+  - `User-Agent`
+  - `osver`
+- asynchronously forwards the payload to your Worker at `POST /api/admin/weread/credentials`
+- returns the original response unchanged so the mobile app continues working normally
+
+Current behavior from the bundled script:
+
+- it only forwards when both `vid` and `skey` are present in the `/login` response
+- the Worker itself is more permissive and can store empty-string fields, but the script still uses `vid + skey` as its send condition
+
+### Configure `weread-rewrite.js`
+
+Edit these placeholders before importing it into your proxy app:
+
+```js
+var API_URL = "YOUR_API_URL/api/admin/weread/credentials";
+var API_KEY = "YOUR_API_KEY";
+```
+
+Guidance:
+
+- For local development, `API_URL` must use a LAN-reachable host such as `http://192.168.x.x:8787`, not `http://localhost:8787`.
+- For production, use your deployed Worker URL such as `https://<your-worker-domain>/api/admin/weread/credentials`.
+- Use the same `API_KEY` configured in `.dev.vars` locally or in Cloudflare secrets remotely.
+
+### Import and validate the Android macro
+
+`weread-rewrite.macro` is an Android automation export that performs the capture flow for you.
+
+Based on the exported macro JSON, one run does this:
+
+1. Launch `ProxyPin` (`com.network.proxy`)
+2. Wait 3 seconds
+3. Tap a fixed screen coordinate to start or confirm the proxy flow
+4. Wait 5 seconds
+5. Launch WeRead (`com.tencent.weread`) with a fresh start
+6. Wait 30 seconds so the `/login` request can happen and the rewrite script can upload credentials
+7. Close WeRead
+8. Close ProxyPin
+
+The bundled export currently uses:
+
+- a regular 3600-second interval trigger
+- a reference start time of `00:30` in the exported macro data
+- a hard-coded tap point at `x=1286`, `y=2606`
+
+Things to verify on your device:
+
+- the proxy app package is really `com.network.proxy`
+- the WeRead package is really `com.tencent.weread`
+- the tap coordinate still hits the correct button on your screen size and DPI
+- your automation app has the accessibility and background-launch permissions it needs
+- your proxy app has certificate / HTTPS interception configured correctly for WeRead traffic
+
+### Recommended automation workflow
+
+1. Import `weread-rewrite.js` into ProxyPin's rewrite or scripting feature.
+2. Replace `API_URL` and `API_KEY`.
+3. Import `weread-rewrite.macro` into your Android automation app.
+4. Adjust the tap coordinate if your device layout differs.
+5. Manually run the macro once.
+6. Check `GET /api/admin/weread/credentials` and confirm `configured: true`.
+7. Let the macro run on its interval to keep credentials fresh.
+
+## First Use
+
+You can use either automatic Android capture or manual upload.
+
+### Option A: automatic credential capture
+
+If the Android automation is configured correctly:
+
+1. Start the macro once or wait for the next interval run.
+2. Confirm the Worker has stored credentials:
+
+```bash
+curl "http://localhost:8787/api/admin/weread/credentials" \
+  -H "x-api-key: <API_KEY>"
+```
+
+3. Trigger the first sync:
+
+```bash
+curl -X POST "http://localhost:8787/api/admin/refresh" \
+  -H "x-api-key: <API_KEY>"
+```
+
+### Option B: manual credential upload
+
+You can also upload credentials yourself:
 
 ```bash
 curl -X POST "http://localhost:8787/api/admin/weread/credentials" \
@@ -149,7 +255,7 @@ curl -X POST "http://localhost:8787/api/admin/weread/credentials" \
   }'
 ```
 
-如果你更换了账号，或者希望强制从头同步游标，可以加上 `resetSync: true`：
+If you want to force a full cursor reset:
 
 ```json
 {
@@ -168,42 +274,44 @@ curl -X POST "http://localhost:8787/api/admin/weread/credentials" \
 }
 ```
 
-### 2. 手动触发一次同步
+### Trigger the first refresh
+
+Canonical admin endpoint:
 
 ```bash
 curl -X POST "http://localhost:8787/api/admin/refresh" \
   -H "x-api-key: <API_KEY>"
 ```
 
-兼容旧调用方式时，也可以继续使用：
+Compatibility alias:
 
 ```bash
 curl -X POST "http://localhost:8787/api/refresh" \
   -H "x-api-key: <API_KEY>"
 ```
 
-### 3. 查询同步结果
+### Query cached data
 
 ```bash
 curl "http://localhost:8787/api/aio" \
   -H "x-api-key: <API_KEY>"
 ```
 
-## 部署
+## Deployment
 
-部署 Worker：
+Deploy the Worker:
 
 ```bash
 bun run deploy
 ```
 
-部署后，把 `API_KEY` 写入 Cloudflare Secret：
+Set the production API key secret:
 
 ```bash
 bunx wrangler secret put API_KEY
 ```
 
-部署完成后，调用线上地址上传凭证：
+Then upload credentials against the deployed Worker:
 
 ```bash
 curl -X POST "https://<your-worker-domain>/api/admin/weread/credentials" \
@@ -224,43 +332,24 @@ curl -X POST "https://<your-worker-domain>/api/admin/weread/credentials" \
   }'
 ```
 
-发布说明：
+Upgrade notes:
 
-- 已有部署在升级到这次重构后，必须重新调用 `POST /api/admin/weread/credentials` 上传一份新的完整凭证 JSON
-- 旧的 `weread_session` 数据不会自动迁移到 `weread_credentials`
-- 如果只部署代码但不补传完整凭证，后续刷新会因为缺少当前凭证而失败
+- Existing deployments must re-upload credentials after upgrading to the current credential-storage model.
+- Old `weread_session` rows are not migrated into `weread_credentials`.
+- Deploying code without uploading a fresh credential payload will cause refresh jobs to fail with a missing-credentials error.
 
-## 凭证更新说明
+## Credential Payload Contract
 
-微信读书凭证可能变化较快，这个项目不依赖长期环境变量来保存它。
+The Worker stores credential fields as strings.
 
-推荐做法：
+Behavior:
 
-- 外部脚本定期获取新的完整凭证 JSON
-- 调用 `POST /api/admin/weread/credentials`
-- Worker 把最新凭证写入 D1
-- 后续定时同步始终使用 D1 中的最新凭证
+- missing fields become empty strings
+- `baseapi` can be sent as either a number or a string
+- stored `baseapi` is treated as a string when building WeRead request headers
+- the Worker does not validate credentials against WeRead at upload time
 
-也就是说，真正需要长期保存的环境变量只有：
-
-- `API_KEY`
-- `CORS_ORIGIN`，可选
-
-## API 说明
-
-所有 `/api/*` 接口都要求：
-
-```http
-x-api-key: <API_KEY>
-```
-
-所有查询接口都只读取 D1 中的缓存数据，不会实时代理微信读书请求。
-
-### `POST /api/admin/weread/credentials`
-
-更新当前微信读书完整凭证。
-
-请求体：
+Example payload:
 
 ```json
 {
@@ -278,51 +367,61 @@ x-api-key: <API_KEY>
 }
 ```
 
-可选字段：
+## API Reference
 
-- `resetSync: true` 会重置增量同步游标
-- 凭证字段会按字符串保存；缺失字段会落成空字符串
-- `baseapi` 可以传 `"33"` 这样的字符串，也可以传数字，最终都会按字符串透传给 WeRead
+All `/api/*` endpoints require:
+
+```http
+x-api-key: <API_KEY>
+```
+
+All query endpoints serve cached D1 data and do not proxy live WeRead responses back to callers.
+
+### `GET /health`
+
+Simple health check.
+
+### `POST /api/admin/weread/credentials`
+
+Stores the current WeRead credential payload.
+
+Optional field:
+
+- `resetSync: true` resets the stored incremental cursors
 
 ### `GET /api/admin/weread/credentials`
 
-查看当前凭证是否已配置，以及最近更新时间。
+Returns safe credential status metadata:
+
+- whether credentials are configured
+- the current `vid`
+- `updatedAt`
+- `updatedAtIso`
+
+Sensitive fields such as `skey`, `accessToken`, and `refreshToken` are never returned here.
 
 ### `POST /api/admin/refresh`
 
-立即执行一次同步。
-
-同步内容包括：
-
-- 好友阅读总时长
-- 好友排行榜
-- 你的个人历史书单
+Runs a manual sync using the same service path as cron.
 
 ### `POST /api/refresh`
 
-兼容旧调用方式的别名，行为与 `POST /api/admin/refresh` 一致。
+Compatibility alias for `POST /api/admin/refresh`.
 
 ### `GET /api/aio`
 
-返回聚合后的好友信息和最新周榜，适合前端一次性加载。数据来自 D1 缓存。
-
-示例：
-
-```bash
-curl "http://localhost:8787/api/aio" \
-  -H "x-api-key: <API_KEY>"
-```
+Returns aggregated friend and ranking data for one-shot frontend loading.
 
 ### `GET /api/friends`
 
-返回好友列表和最新累计阅读时长。数据来自 D1 缓存。
+Returns cached friend list and cumulative reading data.
 
-查询参数：
+Query parameters:
 
 - `limit`
 - `offset`
 
-示例：
+Example:
 
 ```bash
 curl "http://localhost:8787/api/friends?limit=100&offset=0" \
@@ -331,24 +430,17 @@ curl "http://localhost:8787/api/friends?limit=100&offset=0" \
 
 ### `GET /api/ranking`
 
-返回最新一次同步得到的好友周榜。数据来自 D1 缓存。
-
-示例：
-
-```bash
-curl "http://localhost:8787/api/ranking" \
-  -H "x-api-key: <API_KEY>"
-```
+Returns the latest cached weekly ranking snapshot.
 
 ### `GET /api/friends/:userVid/history`
 
-返回某个好友的历史阅读变化。数据来自 D1 缓存。
+Returns historical reading changes for one friend.
 
-查询参数：
+Query parameters:
 
 - `limit`
 
-示例：
+Example:
 
 ```bash
 curl "http://localhost:8787/api/friends/123456/history?limit=100" \
@@ -357,20 +449,20 @@ curl "http://localhost:8787/api/friends/123456/history?limit=100" \
 
 ### `GET /api/readbooks`
 
-返回同步到 D1 的个人历史书单缓存。
+Returns cached personal read-book data from D1.
 
-查询参数：
+Query parameters:
 
 - `limit`
 - `offset`
 - `markStatus`
 
-其中：
+Current `markStatus` values used by this project:
 
-- `markStatus=4` 表示已读完
-- `markStatus=2` 表示正在读
+- `markStatus=4` for completed books
+- `markStatus=2` for books currently being read
 
-示例：
+Examples:
 
 ```bash
 curl "http://localhost:8787/api/readbooks?limit=20&markStatus=4" \
@@ -382,16 +474,16 @@ curl "http://localhost:8787/api/readbooks?limit=20&markStatus=2" \
   -H "x-api-key: <API_KEY>"
 ```
 
-## 调试请求示例
+## Debugging Helpers
 
-仓库里提供了两个调试文件：
+The repository includes two `.http` files:
 
-- [request.http](./request.http)
-- [test.http](./test.http)
+- [`request.http`](./request.http)
+- [`test.http`](./test.http)
 
-可以直接在支持 `.http` 文件的编辑器中发请求。
+You can send these requests directly from editors that support `.http` files.
 
-## 常用命令
+## Common Commands
 
 ```bash
 bun run dev
@@ -402,10 +494,10 @@ bun run migrate:remote
 bun run deploy
 ```
 
-## 注意事项
+## Operational Notes
 
-- `refresh` 会同步你的个人历史书单 `/mine/readbook`，并把结果缓存到 D1
-- `/api/readbooks` 读取的是本地缓存，不是实时代理微信读书
-- 好友同步依赖增量游标 `synckey / syncver`，这些状态会保存在 D1
-- 如果更换了 `vid`，Worker 会自动重置增量同步游标
-- `/mine/readbook` 的分页逻辑基于微信读书当前返回的 `synckey + hasMore` 机制实现
+- Refresh also syncs your `/mine/readbook` data into D1.
+- `/api/readbooks` serves cached local data, not live WeRead traffic.
+- Friend sync depends on incremental `synckey` / `syncver` values stored in D1.
+- When `vid` changes, the Worker automatically resets incremental sync state.
+- The `/mine/readbook` pagination logic follows the current WeRead `synckey + hasMore` behavior.
