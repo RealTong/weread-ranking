@@ -34,6 +34,7 @@
 - [`migrations/`](./migrations)：D1 数据库迁移
 - [`weread-rewrite.js`](./weread-rewrite.js)：把微信读书凭证转发到 Worker 的重写脚本
 - [`weread-rewrite.macro`](./weread-rewrite.macro)：Android 自动化宏导出文件，用来定时打开代理 App 和微信读书
+- [`weread-rewrite-power-optimization.macro`](./weread-rewrite-power-optimization.macro)：给亮灭屏或锁屏场景准备的 MacroDroid 备用导出文件
 - [`request.http`](./request.http) 和 [`test.http`](./test.http)：本地调试请求样例
 
 ## 前置要求
@@ -126,6 +127,7 @@ http://localhost:8787
 
 - [`weread-rewrite.js`](./weread-rewrite.js)
 - [`weread-rewrite.macro`](./weread-rewrite.macro)
+- [`weread-rewrite-power-optimization.macro`](./weread-rewrite-power-optimization.macro)
 
 命名说明：
 
@@ -199,15 +201,45 @@ var API_KEY = "YOUR_API_KEY";
 - 自动化 App 已获得无障碍、后台启动等必要权限
 - 代理 App 已正确配置证书和 HTTPS 抓包能力
 
+### 屏幕开关问题的 MacroDroid 备用脚本
+
+有些 Android 设备在灭屏、锁屏或者亮屏恢复之后，原始自动化流程执行不稳定，导致代理 App 没有正确启动，或者 UI 操作无法按预期触发。
+
+如果你遇到这种情况，请改用 [`weread-rewrite-power-optimization.macro`](./weread-rewrite-power-optimization.macro)。
+
+这个面向 MacroDroid 的备用脚本额外做了电源状态处理：
+
+- 执行前主动亮屏
+- 打开 `ProxyPin`
+- 点击固定坐标以启动或确认代理流程
+- 在打开应用前后增加额外的手势操作
+- 打开微信读书
+- 短暂等待凭证上报完成
+- 关闭两个应用
+- 最后再把屏幕熄灭
+
+当前仓库里的备用导出文件包含这些配置：
+
+- 一个 3600 秒的固定间隔触发器
+- 导出数据里的参考起始时间是 `00:34`
+- 与原脚本相同的固定点击坐标 `x=1286`、`y=2606`
+
+以下情况建议直接用这个备用脚本：
+
+- 原始自动化在熄屏一段时间后不再触发
+- 屏幕唤醒或锁屏状态导致 UI 点击不稳定
+- 设备空闲时会延迟或杀掉原始自动化流程
+
 ### 推荐的自动化接入步骤
 
 1. 把 [`weread-rewrite.js`](./weread-rewrite.js) 导入 ProxyPin 的 Rewrite / Script 功能。
 2. 改好 `API_URL` 和 `API_KEY`。
 3. 把 [`weread-rewrite.macro`](./weread-rewrite.macro) 导入你的 Android 自动化 App。
-4. 根据设备分辨率调整点击坐标。
-5. 手动执行一次宏。
-6. 调用 `GET /api/admin/weread/credentials` 确认已经出现 `configured: true`。
-7. 再让宏按定时器持续运行，保持凭证新鲜。
+4. 如果你的设备有亮灭屏或锁屏导致的自动化问题，就把 [`weread-rewrite-power-optimization.macro`](./weread-rewrite-power-optimization.macro) 导入 MacroDroid 并改用它。
+5. 根据设备分辨率调整点击坐标。
+6. 手动执行一次宏。
+7. 调用 `GET /api/admin/weread/credentials` 确认已经出现 `configured: true`。
+8. 再让宏按定时器持续运行，保持凭证新鲜。
 
 ## 首次使用
 
@@ -218,14 +250,15 @@ var API_KEY = "YOUR_API_KEY";
 如果 Android 自动化已经配好：
 
 1. 手动跑一次宏，或者等下一个定时周期。
-2. 先确认 Worker 已经拿到凭证：
+2. 如果你的设备因为屏幕开关问题导致原宏不稳定，就切换到 [`weread-rewrite-power-optimization.macro`](./weread-rewrite-power-optimization.macro)。
+3. 先确认 Worker 已经拿到凭证：
 
 ```bash
 curl "http://localhost:8787/api/admin/weread/credentials" \
   -H "x-api-key: <API_KEY>"
 ```
 
-3. 然后触发第一次同步：
+4. 然后触发第一次同步：
 
 ```bash
 curl -X POST "http://localhost:8787/api/admin/refresh" \
