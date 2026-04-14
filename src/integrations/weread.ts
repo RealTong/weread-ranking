@@ -131,6 +131,42 @@ export async function fetchUser(creds: WeReadCredentials, userVid: number): Prom
   return fetchJson(creds, { path: '/user', query: { userVid } })
 }
 
+export type WeReadUserProfileResponse = {
+  totalReadingTime?: number
+  totalLikedCount?: number
+  nick?: string
+  name?: string
+  gender?: number
+  hideSex?: number
+  isHide?: number
+  profileVisibleToAll?: number
+  profileVisible?: number
+  preferBooksVisible?: number
+  emptyText?: string
+  showShelf?: number
+  showPreferBooks?: number
+  showReview?: number
+  showMedal?: number
+  showBooklist?: number
+  shelfVisible?: number
+  medalInfo?: unknown
+}
+
+export async function fetchUserProfile(
+  creds: WeReadCredentials,
+  userVid: number,
+): Promise<WeReadUserProfileResponse> {
+  return fetchJson(creds, {
+    path: '/user/profile',
+    query: {
+      totalLikedCount: 1,
+      totalReadingTime: 1,
+      userVid,
+      medalInfo: 1,
+    },
+  })
+}
+
 export type WeReadReadBookFacet = {
   id: number | string
   title: string

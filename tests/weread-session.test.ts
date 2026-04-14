@@ -378,6 +378,16 @@ describe('Incremental refresh cursors', () => {
     globalThis.fetch = (async (input) => {
       const url = toUrl(input)
 
+      if (url.pathname === '/user/profile') {
+        return jsonResponse({
+          totalReadingTime: 100,
+          totalLikedCount: 1,
+          name: 'friend',
+          gender: 2,
+          isHide: 0,
+        })
+      }
+
       if (url.pathname === '/user') {
         return jsonResponse({
           userVid: Number(url.searchParams.get('userVid') ?? 0),
@@ -503,16 +513,43 @@ describe('Incremental refresh cursors', () => {
     ])
   })
 
-  test('reuses stored credentials for refresh and does not fetch per-friend profiles', async () => {
+  test('reuses stored credentials for refresh and enriches friends from profile endpoints', async () => {
     const env = createEnv()
     const seenHeaders: string[] = []
+    const fetchedProfiles: string[] = []
 
     globalThis.fetch = (async (input, init) => {
       const request = input instanceof Request ? input : new Request(String(input), init)
       const url = new URL(request.url)
 
+      if (url.pathname === '/user/profile') {
+        fetchedProfiles.push(`profile:${url.searchParams.get('userVid') ?? ''}`)
+        expect(request.headers.get('accessToken')).toBe('access-token')
+        expect(request.headers.get('user-agent')).toBe('WeRead/10.1.0 (iPhone; iOS 16.7.12; Scale/3.00)')
+        return jsonResponse({
+          totalReadingTime: 100,
+          totalLikedCount: 74,
+          name: 'profile-friend',
+          gender: 2,
+          isHide: 1,
+        })
+      }
+
       if (url.pathname === '/user') {
-        throw new Error('Unexpected fetch: /user')
+        fetchedProfiles.push(`user:${url.searchParams.get('userVid') ?? ''}`)
+        expect(request.headers.get('accessToken')).toBe('access-token')
+        expect(request.headers.get('baseapi')).toBe('303')
+        return jsonResponse({
+          userVid: 888,
+          name: 'user-friend',
+          gender: 2,
+          avatar: 'https://example.com/avatar-888.png',
+          isWeChatFriend: 1,
+          isHide: 1,
+          signature: 'hello world',
+          location: 'Beijing',
+          publish: 0,
+        })
       }
 
       if (url.pathname === '/friend/wechat') {
@@ -575,10 +612,11 @@ describe('Incremental refresh cursors', () => {
     expect(result.ok).toBe(true)
     expect(result.counts).toEqual({
       friendsMeta: 1,
-      profiles: 0,
+      profiles: 1,
       ranking: 1,
     })
     expect(seenHeaders).toEqual(['access-token'])
+    expect(fetchedProfiles).toEqual(['profile:888', 'user:888'])
   })
 
   test('fails refresh cleanly when no current credentials exist', async () => {
@@ -590,14 +628,36 @@ describe('Incremental refresh cursors', () => {
     expect(result.error).toContain('No credentials configured')
   })
 
-  test('keeps wechat-only friends in the API response with reading-time metadata and sparse profile fields', async () => {
+  test('fills wechat-only friends in the API response with profile and avatar data', async () => {
     const env = createEnv()
 
     globalThis.fetch = (async (input) => {
       const url = toUrl(input)
 
+      if (url.pathname === '/user/profile') {
+        const userVid = Number(url.searchParams.get('userVid') ?? 0)
+        return jsonResponse({
+          totalReadingTime: userVid === 999 ? 42 : 100,
+          totalLikedCount: userVid === 999 ? 74 : 11,
+          name: userVid === 999 ? 'hidden-friend' : 'ranked-friend',
+          gender: 2,
+          isHide: userVid === 999 ? 1 : 0,
+        })
+      }
+
       if (url.pathname === '/user') {
-        throw new Error('Unexpected fetch: /user')
+        const userVid = Number(url.searchParams.get('userVid') ?? 0)
+        return jsonResponse({
+          userVid,
+          name: userVid === 999 ? 'hidden-friend' : 'ranked-friend',
+          gender: 2,
+          avatar: userVid === 999 ? 'https://example.com/avatar-999.png' : null,
+          isWeChatFriend: 1,
+          isHide: userVid === 999 ? 1 : 0,
+          signature: userVid === 999 ? 'secret reader' : '',
+          location: userVid === 999 ? '北京 海淀' : '',
+          publish: 0,
+        })
       }
 
       if (url.pathname === '/friend/wechat') {
@@ -663,10 +723,12 @@ describe('Incremental refresh cursors', () => {
         expect.objectContaining({
           userVid: 999,
           latestTotalReadingTime: 42,
-          name: null,
-          avatarUrl: null,
-          location: null,
-          signature: null,
+          name: 'hidden-friend',
+          avatarUrl: 'https://example.com/avatar-999.png',
+          location: '北京 海淀',
+          signature: 'secret reader',
+          isWeChatFriend: 1,
+          isHide: 1,
         }),
       ]),
     )
@@ -677,6 +739,16 @@ describe('My read books sync', () => {
   beforeEach(() => {
     globalThis.fetch = (async (input) => {
       const url = toUrl(input)
+
+      if (url.pathname === '/user/profile') {
+        return jsonResponse({
+          totalReadingTime: 100,
+          totalLikedCount: 1,
+          name: 'reader',
+          gender: 2,
+          isHide: 0,
+        })
+      }
 
       if (url.pathname === '/user') {
         return jsonResponse({
@@ -828,6 +900,16 @@ describe('Route split compatibility', () => {
   beforeEach(() => {
     globalThis.fetch = (async (input) => {
       const url = toUrl(input)
+
+      if (url.pathname === '/user/profile') {
+        return jsonResponse({
+          totalReadingTime: 100,
+          totalLikedCount: 1,
+          name: 'friend',
+          gender: 2,
+          isHide: 0,
+        })
+      }
 
       if (url.pathname === '/user') {
         return jsonResponse({

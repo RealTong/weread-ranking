@@ -1,4 +1,4 @@
-import { fetchAllMineReadBooks, fetchFriendRanking, fetchFriendWechat } from '../integrations/weread'
+import { fetchAllMineReadBooks, fetchFriendRanking, fetchFriendWechat, fetchUser, fetchUserProfile } from '../integrations/weread'
 import {
   createRefreshRun,
   finishRefreshRun,
@@ -38,6 +38,33 @@ function toIntOrDefault(value: string | null | undefined, fallback: number): num
   if (value === null || value === undefined) return fallback
   const parsed = Number.parseInt(value, 10)
   return Number.isFinite(parsed) ? parsed : fallback
+}
+
+async function enrichFriendProfiles(
+  env: CloudflareBindings,
+  userVids: number[],
+  creds: Awaited<ReturnType<typeof requireRefreshCredentials>>,
+) {
+  let enriched = 0
+
+  for (const userVid of userVids) {
+    const [profile, user] = await Promise.all([fetchUserProfile(creds, userVid), fetchUser(creds, userVid)])
+
+    await upsertFriend(env.DB, {
+      userVid,
+      name: user.name ?? profile.name ?? null,
+      gender: user.gender ?? profile.gender ?? null,
+      avatarUrl: user.avatar ?? null,
+      location: user.location ?? null,
+      isWeChatFriend: user.isWeChatFriend ?? null,
+      isHide: user.isHide ?? profile.isHide ?? null,
+      signature: user.signature ?? null,
+    })
+
+    enriched++
+  }
+
+  return enriched
 }
 
 async function requireRefreshCredentials(env: CloudflareBindings) {
@@ -94,9 +121,10 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
     await setSyncState(env.DB, 'friend_wechat_syncver', String(sync.friendWechat.syncver))
 
     const usersMeta = wechat.usersMeta ?? []
+    const userVids = Array.from(new Set(usersMeta.map((meta) => meta.userVid)))
     counts.friendsMeta = usersMeta.length
 
-    for (const userVid of new Set(usersMeta.map((meta) => meta.userVid))) {
+    for (const userVid of userVids) {
       await upsertFriend(env.DB, { userVid })
     }
 
@@ -108,6 +136,8 @@ export async function refreshAll(env: CloudflareBindings, options: RefreshAllOpt
         capturedAt,
       })),
     )
+
+    counts.profiles = await enrichFriendProfiles(env, userVids, creds)
 
     const ranking = await fetchFriendRanking(creds, { synckey: sync.friendRanking.synckey })
     sync.friendRanking = { synckey: ranking.synckey }
