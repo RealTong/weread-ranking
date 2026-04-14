@@ -1,0 +1,15 @@
+meta {
+  name: Reading Now
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{BASE_URL}}/api/readbooks?limit=20&markStatus=2
+  body: none
+  auth: none
+}
+
+headers {
+  x-api-key: {{API_KEY}}
+}

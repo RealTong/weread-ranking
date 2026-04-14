@@ -1,0 +1,15 @@
+meta {
+  name: Finished Read Books
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{BASE_URL}}/api/readbooks?limit=20&markStatus=4
+  body: none
+  auth: none
+}
+
+headers {
+  x-api-key: {{API_KEY}}
+}

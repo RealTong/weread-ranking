@@ -32,10 +32,11 @@
 
 - [`src/`](./src)：Worker 路由、服务层、D1 存储和 WeRead 集成代码
 - [`migrations/`](./migrations)：D1 数据库迁移
+- [`http/`](./http)：用于本地和远程调试的 Bruno collection
 - [`weread-rewrite.js`](./weread-rewrite.js)：把微信读书凭证转发到 Worker 的重写脚本
 - [`weread-rewrite.macro`](./weread-rewrite.macro)：Android 自动化宏导出文件，用来定时打开代理 App 和微信读书
 - [`weread-rewrite-power-optimization.macro`](./weread-rewrite-power-optimization.macro)：给亮灭屏或锁屏场景准备的 MacroDroid 备用导出文件
-- [`request.http`](./request.http) 和 [`test.http`](./test.http)：本地调试请求样例
+- [`test.http`](./test.http)：保留的一组简单原始 HTTP 调试样例
 
 ## 前置要求
 
@@ -509,12 +510,17 @@ curl "http://localhost:8787/api/readbooks?limit=20&markStatus=2" \
 
 ## 调试辅助
 
-仓库里有两个 `.http` 调试文件：
+仓库里现在提供：
 
-- [`request.http`](./request.http)
-- [`test.http`](./test.http)
+- [`http/`](./http)：用于本地和远程环境的 Bruno collection
+- [`http/.env.sample`](./http/.env.sample)：Bruno 的环境变量示例文件
+- [`test.http`](./test.http)：给支持 `.http` 的编辑器使用的简单原始请求样例
 
-可以直接在支持 `.http` 文件的编辑器里发送请求。
+推荐用法：
+
+- 日常调试优先使用 Bruno
+- 真实 `BASE_URL` 和 `API_KEY` 放在已忽略的 `http/.env` 里
+- 需要上传 WeRead 凭证时，直接把最新抓到的 payload 粘贴到 Bruno 的上传请求里
 
 ## 常用命令
 

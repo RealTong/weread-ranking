@@ -1,0 +1,15 @@
+meta {
+  name: Trigger Refresh
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{BASE_URL}}/api/admin/refresh
+  body: none
+  auth: none
+}
+
+headers {
+  x-api-key: {{API_KEY}}
+}

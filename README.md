@@ -32,10 +32,11 @@ It is designed around a practical workflow:
 
 - [`src/`](./src): Worker routes, services, D1 access, and WeRead integration code
 - [`migrations/`](./migrations): D1 schema migrations
+- [`http/`](./http): Bruno collection for local and remote API requests
 - [`weread-rewrite.js`](./weread-rewrite.js): rewrite script that forwards WeRead credentials to the Worker
 - [`weread-rewrite.macro`](./weread-rewrite.macro): Android automation macro export that opens the proxy app and WeRead on an interval
 - [`weread-rewrite-power-optimization.macro`](./weread-rewrite-power-optimization.macro): fallback MacroDroid export for devices with screen power / lock-state automation issues
-- [`request.http`](./request.http) and [`test.http`](./test.http): handy local request examples
+- [`test.http`](./test.http): simple raw HTTP examples kept for quick manual checks
 
 ## Prerequisites
 
@@ -509,12 +510,17 @@ curl "http://localhost:8787/api/readbooks?limit=20&markStatus=2" \
 
 ## Debugging Helpers
 
-The repository includes two `.http` files:
+The repository includes:
 
-- [`request.http`](./request.http)
-- [`test.http`](./test.http)
+- [`http/`](./http): the Bruno collection used for local and remote environments
+- [`http/.env.sample`](./http/.env.sample): sample environment file for Bruno
+- [`test.http`](./test.http): simple raw HTTP examples for editors that support `.http`
 
-You can send these requests directly from editors that support `.http` files.
+Recommended usage:
+
+- use Bruno for day-to-day local and remote API calls
+- keep real `BASE_URL` and `API_KEY` values in `http/.env`, which is gitignored
+- paste the latest WeRead credential payload directly into the Bruno upload request when needed
 
 ## Common Commands
 
