@@ -1,0 +1,15 @@
+meta {
+  name: Friend History
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{BASE_URL}}/api/friends/123456/history?limit=50
+  body: none
+  auth: none
+}
+
+headers {
+  x-api-key: {{API_KEY}}
+}
