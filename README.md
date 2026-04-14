@@ -34,6 +34,7 @@ It is designed around a practical workflow:
 - [`migrations/`](./migrations): D1 schema migrations
 - [`weread-rewrite.js`](./weread-rewrite.js): rewrite script that forwards WeRead credentials to the Worker
 - [`weread-rewrite.macro`](./weread-rewrite.macro): Android automation macro export that opens the proxy app and WeRead on an interval
+- [`weread-rewrite-power-optimization.macro`](./weread-rewrite-power-optimization.macro): fallback MacroDroid export for devices with screen power / lock-state automation issues
 - [`request.http`](./request.http) and [`test.http`](./test.http): handy local request examples
 
 ## Prerequisites
@@ -126,6 +127,7 @@ This repository now includes two Android-side assets:
 
 - [`weread-rewrite.js`](./weread-rewrite.js)
 - [`weread-rewrite.macro`](./weread-rewrite.macro)
+- [`weread-rewrite-power-optimization.macro`](./weread-rewrite-power-optimization.macro)
 
 Important naming note:
 
@@ -199,15 +201,45 @@ Things to verify on your device:
 - your automation app has the accessibility and background-launch permissions it needs
 - your proxy app has certificate / HTTPS interception configured correctly for WeRead traffic
 
+### Fallback MacroDroid script for screen power issues
+
+Some Android devices do not run the normal automation reliably when the screen turns off, the lock state changes, or the automation app cannot restore the UI state cleanly.
+
+If that happens, use [`weread-rewrite-power-optimization.macro`](./weread-rewrite-power-optimization.macro) instead.
+
+This MacroDroid-oriented fallback adds extra power-state handling:
+
+- turns the screen on before starting the proxy flow
+- launches `ProxyPin`
+- performs the fixed tap used to start or confirm the proxy flow
+- adds extra gesture actions before and after launching apps
+- launches WeRead
+- waits briefly for credential upload
+- closes both apps
+- turns the screen off again at the end
+
+The bundled fallback export currently uses:
+
+- a regular 3600-second interval trigger
+- a reference start time of `00:34` in the exported macro data
+- the same fixed tap point at `x=1286`, `y=2606`
+
+Use this fallback when:
+
+- the original automation does not trigger after the screen has been off for a while
+- screen wake / unlock state prevents UI actions from firing reliably
+- your device kills or delays the original automation when idle
+
 ### Recommended automation workflow
 
 1. Import `weread-rewrite.js` into ProxyPin's rewrite or scripting feature.
 2. Replace `API_URL` and `API_KEY`.
 3. Import `weread-rewrite.macro` into your Android automation app.
-4. Adjust the tap coordinate if your device layout differs.
-5. Manually run the macro once.
-6. Check `GET /api/admin/weread/credentials` and confirm `configured: true`.
-7. Let the macro run on its interval to keep credentials fresh.
+4. If your device has screen on/off or lock-state issues, import [`weread-rewrite-power-optimization.macro`](./weread-rewrite-power-optimization.macro) in MacroDroid and use that one instead.
+5. Adjust the tap coordinate if your device layout differs.
+6. Manually run the macro once.
+7. Check `GET /api/admin/weread/credentials` and confirm `configured: true`.
+8. Let the macro run on its interval to keep credentials fresh.
 
 ## First Use
 
@@ -218,14 +250,15 @@ You can use either automatic Android capture or manual upload.
 If the Android automation is configured correctly:
 
 1. Start the macro once or wait for the next interval run.
-2. Confirm the Worker has stored credentials:
+2. If the normal macro is unstable on your device because of screen power behavior, switch to [`weread-rewrite-power-optimization.macro`](./weread-rewrite-power-optimization.macro).
+3. Confirm the Worker has stored credentials:
 
 ```bash
 curl "http://localhost:8787/api/admin/weread/credentials" \
   -H "x-api-key: <API_KEY>"
 ```
 
-3. Trigger the first sync:
+4. Trigger the first sync:
 
 ```bash
 curl -X POST "http://localhost:8787/api/admin/refresh" \
